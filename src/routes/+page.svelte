@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { todayThreads } from '$lib/today';
+  import { sumThreadUsage, todayThreads } from '$lib/today';
   import type { Snapshot } from '$lib/types';
 
   let data = $state<Snapshot | null>(null);
@@ -14,7 +14,9 @@
   const exact = (n: number | null | undefined) => n == null ? 'Not recorded' : n.toLocaleString();
   const project = (cwd: string) => cwd.split(/[\\/]/).filter(Boolean).at(-1) || cwd;
   const dateTime = (seconds: number) => new Date(seconds * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
-  let scoped = $derived(period === 'today' ? todayThreads(data?.threads || [], now) : data?.threads || []);
+  let today = $derived(todayThreads(data?.threads || [], now));
+  let daily = $derived(sumThreadUsage(today));
+  let scoped = $derived(period === 'today' ? today : data?.threads || []);
   let threads = $derived(scoped.filter(t => `${t.title} ${t.cwd} ${t.id} ${t.model || ''}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => b.updatedAt - a.updatedAt));
 
   async function refresh() {
@@ -66,6 +68,25 @@
     <span class="thread-count">{data ? scoped.length : '—'} threads</span>
     <button class="refresh" onclick={refresh} disabled={refreshing}><span aria-hidden="true">↻</span>{refreshing ? 'Reading…' : 'Refresh'}</button>
   </div>
+
+  {#if data}
+    <section class="daily-card" aria-labelledby="daily-title">
+      <div class="daily-total">
+        <span id="daily-title">Today’s saved usage</span>
+        <strong title={exact(daily.total)}>{fmt(daily.total)}</strong>
+        <small>tokens across {today.length} threads · {daily.calls} calls</small>
+      </div>
+      <figure>
+        <figcaption>Daily token mix <span>{fmt(daily.total)} total</span></figcaption>
+        <div class="mix-track" role="img" aria-label={`${exact(daily.cached)} cached input, ${exact(daily.input)} new input, ${exact(daily.output)} output tokens`}>
+          <span class="cached" style:flex={daily.cached}></span>
+          <span class="input" style:flex={daily.input}></span>
+          <span class="output" style:flex={daily.output}></span>
+        </div>
+        <div class="mix-key"><span><i class="cached"></i>Cached</span><span><i class="input"></i>New input</span><span><i class="output"></i>Output</span></div>
+      </figure>
+    </section>
+  {/if}
 
   {#if !data && !error}
     <p class="empty" role="status">Reading saved Codex threads…</p>
@@ -162,6 +183,11 @@
   label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
   .search { flex: 1; max-width: 420px; }
   .thread-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 0; margin: 0; list-style: none; }
+  .daily-card { display: grid; grid-template-columns: minmax(220px, .65fr) minmax(280px, 1.35fr); align-items: center; gap: 40px; margin-bottom: 16px; padding: 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  .daily-total { display: flex; flex-direction: column; }
+  .daily-total > span { color: var(--muted); font-size: 12px; }
+  .daily-total strong { margin: 3px 0; font: 650 34px/1.1 ui-monospace, Consolas, monospace; letter-spacing: -1.5px; }
+  .daily-total small { color: var(--muted); }
   .thread-card { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
   .subagent-card { border-color: #aaa3e8; background: #fbfaff; box-shadow: inset 4px 0 var(--indigo); }
   article { padding: 24px; }
@@ -198,6 +224,7 @@
     main { padding: 0 20px 24px; }
     article { padding: 20px; }
     .card-bottom { grid-template-columns: 1fr; gap: 20px; }
+    .daily-card { grid-template-columns: 1fr; gap: 20px; }
     .search { max-width: none; }
   }
   @media (max-width: 420px) {

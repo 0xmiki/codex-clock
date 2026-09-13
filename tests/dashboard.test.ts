@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Rpc } from '../server/rpc';
 import { createDashboard, readGeneratedTitles } from '../server/dashboard';
 import { createUsageReader, parseUsage } from '../server/usage';
-import { todayThreads } from '../src/lib/today';
+import { sumThreadUsage, todayThreads } from '../src/lib/today';
 import type { Thread } from '../src/lib/types';
 import { makeFixture, tokenLine } from './fixture';
 
@@ -70,4 +70,9 @@ test('Today selects saved updates by UTC date only', () => {
   const threads = [{ id: 'old', updatedAt: (now - 120000) / 1000 }, { id: 'today', updatedAt: (now - 60000) / 1000 }, { id: 'tomorrow', updatedAt: (now + 86400000) / 1000 }] as Thread[];
   expect(todayThreads(threads, now).map(t => t.id)).toEqual(['today']);
   expect(todayThreads(threads, now + 86400000).map(t => t.id)).toEqual(['tomorrow']);
+});
+
+test('daily summary adds recorded thread usage', () => {
+  const usage = { totalTokens: 100, inputTokens: 80, cachedInputTokens: 60, outputTokens: 20, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 1, modelCalls: 2, recentRequests: [] };
+  expect(sumThreadUsage([{ usage }, { usage: { ...usage, cachedInputTokens: null } }, { usage: null }] as Thread[])).toEqual({ total: 200, cached: 60, input: 100, output: 40, calls: 4 });
 });
