@@ -5,8 +5,7 @@
 
   let data = $state<Snapshot | null>(null);
   let error = $state('');
-  let search = $state('');
-  let period = $state('today');
+  let selectedProject = $state('');
   let refreshing = $state(false);
   let now = $state(Date.now());
   const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
@@ -16,8 +15,8 @@
   const dateTime = (seconds: number) => new Date(seconds * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
   let today = $derived(todayThreads(data?.threads || [], now));
   let daily = $derived(sumThreadUsage(today));
-  let scoped = $derived(period === 'today' ? today : data?.threads || []);
-  let threads = $derived(scoped.filter(t => `${t.title} ${t.cwd} ${t.id} ${t.model || ''}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => b.updatedAt - a.updatedAt));
+  let projects = $derived([...new Set((data?.threads || []).map(thread => thread.cwd))].sort((a, b) => project(a).localeCompare(project(b))));
+  let threads = $derived((data?.threads || []).filter(thread => !selectedProject || thread.cwd === selectedProject).toSorted((a, b) => b.updatedAt - a.updatedAt));
 
   async function refresh() {
     if (refreshing) return;
@@ -44,7 +43,7 @@
 </script>
 
 <svelte:head>
-  <title>{period === 'today' ? 'Today' : 'Recent threads'} · MyLimits</title>
+  <title>Threads · MyLimits</title>
   <meta name="description" content="Compare saved Codex thread usage, context pressure, and token composition." />
 </svelte:head>
 
@@ -63,9 +62,13 @@
   {/if}
 
   <div class="toolbar">
-    <label>Period<select bind:value={period}><option value="today">Today</option><option value="recent">Recent threads</option></select></label>
-    <label class="search">Search threads<input type="search" placeholder="Title, project or model" bind:value={search} /></label>
-    <span class="thread-count">{data ? scoped.length : '—'} threads</span>
+    <nav class="project-filters" aria-label="Filter threads by project">
+      <button class="pill" class:active={!selectedProject} aria-pressed={!selectedProject} onclick={() => selectedProject = ''}>All</button>
+      {#each projects as cwd}
+        <button class="pill" class:active={selectedProject === cwd} aria-pressed={selectedProject === cwd} title={cwd} onclick={() => selectedProject = cwd}>{project(cwd)}</button>
+      {/each}
+    </nav>
+    <span class="thread-count">{data ? threads.length : '—'} threads</span>
     <button class="refresh" onclick={refresh} disabled={refreshing}><span aria-hidden="true">↻</span>{refreshing ? 'Reading…' : 'Refresh'}</button>
   </div>
 
@@ -92,8 +95,8 @@
     <p class="empty" role="status">Reading saved Codex threads…</p>
   {:else if data && !threads.length}
     <div class="empty" role="status">
-      <h2>{search ? 'No matching threads' : period === 'today' ? 'No threads updated today' : 'No saved threads'}</h2>
-      {#if search}<button onclick={() => search = ''}>Clear search</button>{:else if period === 'today'}<button onclick={() => period = 'recent'}>View recent threads</button>{/if}
+      <h2>{selectedProject ? 'No threads in this project' : 'No saved threads'}</h2>
+      {#if selectedProject}<button onclick={() => selectedProject = ''}>View all projects</button>{/if}
     </div>
   {:else}
     <ul class="thread-list" aria-label="Saved threads">
@@ -165,9 +168,7 @@
   :global(:root) { --paper: #eef2f8; --surface: #fff; --ink: #202944; --muted: #5b6780; --line: #ccd4e0; --indigo: #514bc2; --cyan: #007f90; }
   :global(*) { box-sizing: border-box; }
   :global(body) { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 'Segoe UI', system-ui, sans-serif; }
-  :global(button), :global(input), :global(select) { font: inherit; color: inherit; }
-  :global(button), :global(select), :global(input) { min-height: 44px; border: 1px solid var(--line); border-radius: 7px; padding: 10px 13px; background: var(--surface); }
-  :global(button), :global(select) { cursor: pointer; }
+  :global(button) { min-height: 44px; border: 1px solid var(--line); border-radius: 7px; padding: 10px 13px; background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
   :global(:focus-visible) { outline: 3px solid var(--indigo); outline-offset: 3px; }
   :global(button:disabled) { opacity: .65; cursor: wait; }
   main { max-width: 1380px; margin: auto; padding: 0 34px 34px; }
@@ -178,10 +179,11 @@
   .product-label { color: var(--muted); letter-spacing: 1px; }
   .refresh { display: flex; align-items: center; gap: 8px; }
   .refresh span { font-size: 20px; line-height: 1; }
-  .toolbar { display: flex; gap: 16px; align-items: flex-end; margin: 22px 0; }
+  .toolbar { display: flex; gap: 16px; align-items: center; margin: 22px 0; }
+  .project-filters { display: flex; flex: 1; gap: 8px; overflow-x: auto; scrollbar-width: thin; }
+  .pill { min-height: 36px; padding: 7px 14px; border-radius: 999px; color: var(--muted); white-space: nowrap; }
+  .pill.active { border-color: var(--indigo); background: var(--indigo); color: white; }
   .thread-count { margin-left: auto; align-self: center; color: var(--muted); font: 11px ui-monospace, monospace; white-space: nowrap; }
-  label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
-  .search { flex: 1; max-width: 420px; }
   .thread-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 0; margin: 0; list-style: none; }
   .daily-card { display: grid; grid-template-columns: minmax(220px, .65fr) minmax(280px, 1.35fr); align-items: center; gap: 40px; margin-bottom: 16px; padding: 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
   .daily-total { display: flex; flex-direction: column; }
@@ -225,7 +227,6 @@
     article { padding: 20px; }
     .card-bottom { grid-template-columns: 1fr; gap: 20px; }
     .daily-card { grid-template-columns: 1fr; gap: 20px; }
-    .search { max-width: none; }
   }
   @media (max-width: 420px) {
     main { padding: 0 14px 20px; }
@@ -234,9 +235,7 @@
     .refresh { font-size: 12px; padding: 9px; }
     .toolbar { gap: 10px; }
     .thread-count { display: none; }
-    .toolbar label:first-child { max-width: 130px; }
-    .search { min-width: 0; }
-    input, select { width: 100%; min-width: 0; font-size: 12px; }
+    .project-filters { min-width: 0; }
     article { padding: 18px; }
     footer { font-size: 10px; }
   }
