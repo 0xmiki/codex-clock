@@ -1,0 +1,39 @@
+{
+  "name": "mylimits",
+  "version": "0.1.0",
+  "description": "A local Codex thread and usage dashboard",
+  "type": "module",
+  "bin": {
+    "mylimits": "bin/mylimits.cjs"
+  },
+  "files": [
+    "bin",
+    "dist/mylimits",
+    "dist/mylimits.exe",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "bun scripts/dev.ts",
+    "build": "vite build && bun scripts/build.ts",
+    "start": "bun server/main.ts",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test": "bun test",
+    "prepack": "node scripts/prepack.cjs"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.0",
+    "@sveltejs/kit": "^2.0.0",
+    "@sveltejs/vite-plugin-svelte": "^6.0.0",
+    "@types/bun": "^1.3.0",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^7.0.0"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ]
+}

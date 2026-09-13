@@ -1,0 +1,6 @@
+node_modules/
+.svelte-kit/
+build/
+dist/
+server/assets.generated.ts
+*.tgz
