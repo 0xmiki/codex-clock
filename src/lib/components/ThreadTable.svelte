@@ -4,9 +4,7 @@
   import * as Table from '$lib/components/ui/table/index.js';
   import * as Tooltip from '$lib/components/ui/tooltip/index.js';
   import { Button } from '$lib/components/ui/button/index.js';
-  import { Input } from '$lib/components/ui/input/index.js';
   import { Badge } from '$lib/components/ui/badge/index.js';
-  import MagnifyingGlassIcon from 'phosphor-svelte/lib/MagnifyingGlassIcon';
   import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon';
   import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon';
   import CaretUpIcon from 'phosphor-svelte/lib/CaretUpIcon';
@@ -23,7 +21,6 @@
   let { threads, now }: { threads: Thread[]; now: number } = $props();
 
   type SortKey = 'when' | 'tokens' | 'cache' | 'cost' | 'pressure' | 'project';
-  let search = $state('');
   let sortKey = $state<SortKey>('when');
   let sortDesc = $state(true);
   let expandedId = $state<string | null>(null);
@@ -37,16 +34,9 @@
     models: Object.entries(thread.usage?.byModel || {}).filter(([, usage]) => usage.modelCalls > 0)
   });
 
-  const matches = (thread: Thread, query: string) => {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
-    return thread.title.toLowerCase().includes(q) || thread.cwd.toLowerCase().includes(q) || thread.id.toLowerCase().includes(q) || Object.keys(thread.usage?.byModel || {}).some(model => model.toLowerCase().includes(q));
-  };
-
   const sorted = $derived.by(() => {
-    const filtered = threads.filter(thread => matches(thread, search));
     const dir = sortDesc ? -1 : 1;
-    return filtered.toSorted((a, b) => {
+    return threads.toSorted((a, b) => {
       const x = row(a), y = row(b);
       switch (sortKey) {
         case 'tokens': return ((x.tokens ?? -1) - (y.tokens ?? -1)) * dir;
@@ -78,16 +68,6 @@
 
 <section class="thread-view" aria-label="Saved threads">
 <Card.Root class="gap-0 py-0">
-  <header class="section-head">
-    <div>
-      <h2>Thread activity</h2>
-      <p>{threads.length} saved {threads.length === 1 ? 'thread' : 'threads'}{search && sorted.length !== threads.length ? ` · ${sorted.length} matching` : ''}</p>
-    </div>
-    <label class="search">
-      <MagnifyingGlassIcon size={14} aria-hidden="true" />
-      <Input class="w-[300px] max-w-[68vw] pl-8" type="search" placeholder="Search titles, projects, models, ids…" bind:value={search} aria-label="Search threads" />
-    </label>
-  </header>
 
     <Table.Root class="min-w-[900px]">
       <Table.Header>
@@ -232,7 +212,7 @@
             </Table.Row>
           {/if}
         {:else}
-          <Table.Row><Table.Cell colspan={9} class="none">{search ? `No threads match “${search}”.` : 'No saved threads in this view.'}</Table.Cell></Table.Row>
+          <Table.Row><Table.Cell colspan={9} class="none">No saved threads in this view.</Table.Cell></Table.Row>
         {/each}
       </Table.Body>
     </Table.Root>
@@ -243,11 +223,6 @@
 .thread-view {
   :global {
 
-  .section-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 20px 22px 16px; flex-wrap: wrap; }
-  h2 { margin: 0; font: 600 17px/1.3 var(--font-sans); letter-spacing: -0.2px; }
-  .section-head p { margin: 2px 0 0; color: var(--muted-foreground); font-size: 12px; }
-  .search { position: relative; display: block; }
-  .search svg { position: absolute; left: 11px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); color: var(--muted-foreground); pointer-events: none; }
 
   th.numeric, td.numeric { text-align: right; }
   th.numeric .sort { justify-content: flex-end; width: 100%; }
