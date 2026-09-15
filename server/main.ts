@@ -2,7 +2,10 @@ import { parseArgs } from 'node:util';
 import { Rpc } from './rpc';
 import { createDashboard } from './dashboard';
 import { createAssistant } from './assistant';
-import assets from './assets.generated';
+// Vite serves development assets; only standalone runs load the generated bundle.
+const assets: Record<string, string> = process.env.MYLIMITS_DEV === '1'
+  ? {}
+  : (await import('./assets.generated')).default;
 
 const { values } = parseArgs({ args: Bun.argv.slice(2), options: { port: { type: 'string', default: '4260' }, codex: { type: 'string' }, help: { type: 'boolean' } } });
 if (values.help) {

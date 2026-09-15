@@ -21,11 +21,12 @@
   let now = $state(Date.now());
 
   let today = $derived(todayThreads(data?.threads || [], now));
-  let daily = $derived(sumThreadUsage(today));
-  let turns = $derived(today.reduce((sum, thread) => sum + (thread.usage?.turns ?? 0), 0));
+  let selectedToday = $derived(today.filter(thread => !selectedProject || thread.cwd === selectedProject));
+  let daily = $derived(sumThreadUsage(selectedToday));
+  let turns = $derived(selectedToday.reduce((sum, thread) => sum + (thread.usage?.turns ?? 0), 0));
   let dailyCost = $derived.by(() => {
     let total = 0, any = false;
-    for (const thread of today) {
+    for (const thread of selectedToday) {
       const cost = threadApiCost(thread);
       if (cost !== null) { total += cost; any = true; }
     }
@@ -116,12 +117,15 @@
         <p>Reading local Codex threads…</p>
       </div>
     {:else if data}
-      <div class="overview">
-        <TodayPanel total={daily.total} cached={daily.cached} fresh={daily.input} output={daily.output} calls={daily.calls} {turns} sessions={today.length} cost={dailyCost} />
+      <div class="dashboard">
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex (Scrollable sidebar must support keyboard scrolling.) -->
+      <aside class="summary-sidebar" aria-label="Usage overview" tabindex="0">
+        <TodayPanel total={daily.total} cached={daily.cached} fresh={daily.input} output={daily.output} calls={daily.calls} {turns} sessions={selectedToday.length} cost={dailyCost} projectName={selectedProject ? project(selectedProject) : 'All projects'} />
         <TrendChart {buckets} />
-      </div>
+        <Standouts {today} onSelectProject={selectProject} />
+      </aside>
 
-      <Standouts {today} onSelectProject={selectProject} />
+      <div class="activity">
 
       {#if projects.length > 1}
         <nav class="pills" aria-label="Filter threads by project">
@@ -140,6 +144,8 @@
         <span>Read from local Codex data{data.updatedAt ? ` at ${new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}{data.hasMore ? ` · newest ${data.threads.length} saved threads` : ''}</span>
         <span>Nothing leaves this machine</span>
       </footer>
+      </div>
+      </div>
     {/if}
   </main>
 
@@ -184,13 +190,17 @@
   .tool svg.spin { animation: spin 0.9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .shell { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; padding: 22px 28px 30px; max-width: 1720px; margin: 0 auto; }
+  .shell { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; padding: 22px 28px 30px; max-width: 2200px; margin: 0 auto; }
   .shell.narrow { grid-template-columns: minmax(0, 1fr); }
   main { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
   .coach-dock { position: sticky; top: 82px; height: calc(100vh - 104px); min-height: 560px; }
   .coach-dock :global(.coach) { height: 100%; }
 
-  .overview { display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); gap: 16px; align-items: stretch; }
+  .dashboard { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 20px; align-items: start; }
+  .summary-sidebar, .activity { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .summary-sidebar { position: sticky; top: 82px; max-height: calc(100dvh - 104px); overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding-right: 6px; }
+  .summary-sidebar > :global(*) { flex-shrink: 0; }
+  #threads { min-width: 0; scroll-margin-top: 82px; }
 
   .pills { display: flex; flex-wrap: wrap; gap: 8px; }
   .pills button {
@@ -225,7 +235,10 @@
     .coach-dock :global(.coach) { height: auto; }
     .coach-dock :global(.log) { min-height: 180px; max-height: 320px; }
   }
-  @media (max-width: 980px) { .overview { grid-template-columns: 1fr; } }
+  @media (max-width: 980px) {
+    .dashboard { grid-template-columns: minmax(0, 1fr); }
+    .summary-sidebar { position: static; max-height: min(60dvh, 560px); }
+  }
   @media (max-width: 700px) {
     .topbar { padding: 0 16px; }
     .shell { padding: 16px 16px 24px; }

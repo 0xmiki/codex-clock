@@ -92,7 +92,7 @@
 </div>
 
 <style>
-  .standouts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .standouts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .card {
     padding: 20px 22px; border: 1px solid var(--line); border-radius: var(--radius-card);
     background: var(--bg1); box-shadow: var(--lift); min-width: 0;
@@ -118,11 +118,11 @@
 
   /* heaviest */
   .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-  .row.dim { margin-top: 2px; padding-bottom: 9px; color: var(--ink-faint); font-size: 11px; }
+  .row.dim { flex-wrap: wrap; margin-top: 2px; padding-bottom: 9px; color: var(--ink-faint); font-size: 11px; }
   li + li .row:first-child { padding-top: 6px; border-top: 1px solid var(--line-soft); }
   .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: 13px; }
   .tokens { color: var(--ink); font: 600 13px var(--font-data); }
-  .actions { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
+  .actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; white-space: nowrap; }
   .actions b { font: 600 11px var(--font-data); }
   .tone-good { color: var(--good); }
   .tone-warn { color: var(--warn); }
@@ -141,6 +141,5 @@
   .label { margin-top: 8px; color: var(--ink); font: 600 12px var(--font-ui); }
   .caption { max-width: 140px; }
 
-  @media (max-width: 1280px) { .standouts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 720px) { .standouts { grid-template-columns: 1fr; } }
+
 </style>

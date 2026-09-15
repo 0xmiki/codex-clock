@@ -40,7 +40,7 @@
 <style>
   .trend {
     display: flex; flex-direction: column;
-    padding: 26px 28px 20px;
+    padding: 20px;
     border: 1px solid var(--line); border-radius: var(--radius-card);
     background: var(--bg1);
     box-shadow: var(--lift);
@@ -48,7 +48,7 @@
   }
   h2 { margin: 0; font: 600 15px/1.3 var(--font-display); letter-spacing: -0.2px; }
   header p { margin: 3px 0 0; color: var(--ink-faint); font-size: 12px; }
-  .bars { display: flex; flex: 1; align-items: stretch; gap: 14px; margin-top: 20px; min-height: 150px; }
+  .bars { display: flex; flex: 1; align-items: stretch; gap: 8px; margin-top: 20px; min-height: 150px; }
   .slot { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; }
   .value { color: var(--ink-dim); font: 600 11px var(--font-data); font-variant-numeric: tabular-nums; }
   .bar-wrap { display: flex; align-items: flex-end; height: 110px; width: 100%; max-width: 64px; border-bottom: 1px solid var(--line); }
