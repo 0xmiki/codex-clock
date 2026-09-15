@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Rpc } from '../server/rpc';
 import { createDashboard, readGeneratedTitles, readTranscript } from '../server/dashboard';
 import { createUsageReader, parseUsage } from '../server/usage';
-import { activeProjects, efficiencyPressure, estimatedApiCost, estimatedCredits, sumThreadUsage, todayThreads, workflowPressure } from '../src/lib/today';
+import { activeProjects, cacheRate, dailyBuckets, efficiencyPressure, estimatedApiCost, estimatedCredits, projectRollup, sumCacheRate, sumThreadUsage, todayThreads, workflowPressure } from '../src/lib/today';
 import type { Snapshot, Thread, UsageMetrics } from '../src/lib/types';
 import { makeFixture, tokenLine } from './fixture';
 import { usagePrompt } from '../server/assistant';
@@ -123,4 +123,40 @@ test('assistant context keeps the costliest today threads first', () => {
   const thread = { id: 'a', title: 'Small', cwd: '/a', modelProvider: 'openai', updatedAt: now / 1000, usageError: null, usage };
   const snapshot: Snapshot = { error: null, updatedAt: now, hasMore: false, threads: [thread, { ...thread, id: 'b', title: 'Large', cwd: '/b', usage: { ...usage, totalTokens: 500 } }] };
   expect(usagePrompt('What cost most?', snapshot, now).indexOf('Large')).toBeLessThan(usagePrompt('What cost most?', snapshot, now).indexOf('Small'));
+});
+
+test('daily buckets order days chronologically and flag today', () => {
+  const now = Date.parse('2026-09-15T12:00:00Z');
+  const usage = { totalTokens: 500, inputTokens: 400, cachedInputTokens: 300, outputTokens: 100, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 2, modelCalls: 4, recentRequests: [] };
+  const day = (offsetDays: number) => (now - offsetDays * 86400000) / 1000;
+  const threads = [
+    { updatedAt: day(2), usage },
+    { updatedAt: day(0), usage },
+    { updatedAt: day(0), usage },
+    { updatedAt: day(0), usage: null }
+  ] as Thread[];
+  const buckets = dailyBuckets(threads, now, 5);
+  expect(buckets.map(bucket => [bucket.day, bucket.threads, bucket.tokens, bucket.isToday])).toEqual([
+    ['2026-09-13', 1, 500, false],
+    ['2026-09-15', 3, 1500, true]
+  ]);
+  expect(dailyBuckets([], now)).toEqual([]);
+  expect(dailyBuckets(threads, now, 1)).toHaveLength(1);
+});
+
+test('project rollup aggregates tokens per cwd and ranks by weight', () => {
+  const usage = { totalTokens: 100, inputTokens: 80, cachedInputTokens: 60, outputTokens: 20, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 1, modelCalls: 2, recentRequests: [] };
+  const thread = (cwd: string, tokens: number) => ({ cwd, usage: { ...usage, totalTokens: tokens } }) as Thread;
+  const rollup = projectRollup([thread('/x/a', 100), thread('/x/b', 900), thread('/x/a', 50), { cwd: '/x/c' } as Thread], 2);
+  expect(rollup.map(row => [row.name, row.tokens, row.threads])).toEqual([['b', 900, 1], ['a', 150, 2]]);
+});
+
+test('cache rate stays unknown when counters are missing or zero', () => {
+  const metrics = { inputTokens: 80, cachedInputTokens: 60 };
+  expect(cacheRate({ ...metrics } as UsageMetrics)).toBe(75);
+  expect(cacheRate({ ...metrics, inputTokens: 0 } as UsageMetrics)).toBeNull();
+  expect(cacheRate({ ...metrics, cachedInputTokens: null } as UsageMetrics)).toBeNull();
+  expect(cacheRate(null)).toBeNull();
+  expect(sumCacheRate([{ usage: { ...metrics } }, { usage: { ...metrics, cachedInputTokens: null } }] as Thread[])).toBeNull();
+  expect(sumCacheRate([{ usage: { ...metrics } }, { usage: { ...metrics, inputTokens: 20, cachedInputTokens: 20 } }] as Thread[])).toBe(80);
 });

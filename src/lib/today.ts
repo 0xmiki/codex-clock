@@ -72,3 +72,45 @@ export const workflowPressure = (threads: Thread[]) => {
   if (!scored.length) return null;
   return Math.round(scored.reduce((sum, item) => sum + item.score * item.weight, 0) / scored.reduce((sum, item) => sum + item.weight, 0));
 };
+
+export type DayBucket = { day: string; tokens: number; threads: number; calls: number; isToday: boolean };
+export const dailyBuckets = (threads: Thread[], now: number, maxDays = 6) => {
+  const todayKey = dayKey(now);
+  const buckets = new Map<string, DayBucket>();
+  for (const thread of threads) {
+    const day = dayKey(thread.updatedAt * 1000);
+    const bucket = buckets.get(day) || { day, tokens: 0, threads: 0, calls: 0, isToday: day === todayKey };
+    bucket.tokens += thread.usage?.totalTokens ?? 0;
+    bucket.calls += thread.usage?.modelCalls ?? 0;
+    bucket.threads++;
+    buckets.set(day, bucket);
+  }
+  return [...buckets.values()].toSorted((a, b) => a.day.localeCompare(b.day)).slice(-maxDays).map(bucket => ({ ...bucket, isToday: bucket.day === todayKey }));
+};
+
+export type ProjectRollup = { cwd: string; name: string; tokens: number; threads: number };
+export const projectRollup = (threads: Thread[], limit = 5) => {
+  const rollup = new Map<string, ProjectRollup>();
+  for (const thread of threads) {
+    const row = rollup.get(thread.cwd) || { cwd: thread.cwd, name: thread.cwd.split(/[\\/]/).filter(Boolean).at(-1) || thread.cwd, tokens: 0, threads: 0 };
+    row.tokens += thread.usage?.totalTokens ?? 0;
+    row.threads++;
+    rollup.set(thread.cwd, row);
+  }
+  return [...rollup.values()].toSorted((a, b) => b.tokens - a.tokens).slice(0, limit);
+};
+
+// Cached input is part of input; unknown stays unknown rather than reading as zero.
+export const cacheRate = (usage: UsageMetrics | null | undefined) =>
+  !usage || usage.cachedInputTokens === null || usage.inputTokens === 0 ? null : Math.round(usage.cachedInputTokens / usage.inputTokens * 100);
+
+export const sumCacheRate = (threads: Thread[]) => {
+  let cached = 0, input = 0, known = true;
+  for (const thread of threads) {
+    if (!thread.usage) continue;
+    if (thread.usage.cachedInputTokens === null) known = false;
+    else cached += thread.usage.cachedInputTokens;
+    input += thread.usage.inputTokens;
+  }
+  return !input || !known ? null : Math.round(cached / input * 100);
+};
