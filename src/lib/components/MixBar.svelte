@@ -1,34 +1,24 @@
 <script lang="ts">
+  import { BarChart } from 'layerchart';
+  import * as Chart from '$lib/components/ui/chart/index.js';
   import { exact } from '$lib/format';
-  let {
-    cached = 0, fresh = 0, output = 0, height = 8, radius = 99, gap = true
-  }: { cached?: number; fresh?: number; output?: number; height?: number; radius?: number; gap?: boolean } = $props();
+  let { cached = 0, fresh = 0, output = 0, height = 8 }: { cached?: number; fresh?: number; output?: number; height?: number } = $props();
   const total = $derived(cached + fresh + output);
+  const data = $derived([{ group: 'Tokens', cached, fresh, output }]);
+  const config = {
+    cached: { label: 'Cached input', color: 'var(--chart-1)' },
+    fresh: { label: 'Fresh input', color: 'var(--chart-4)' },
+    output: { label: 'Output', color: 'var(--chart-2)' }
+  } satisfies Chart.ChartConfig;
+  const series = Object.entries(config).map(([key, item]) => ({ key, ...item }));
 </script>
 
-<div
-  class="mix"
-  class:gap
-  style:height="{height}px"
-  style:border-radius="{radius}px"
-  role="img"
-  aria-label={total ? `${exact(cached)} cached input, ${exact(fresh)} fresh input, ${exact(output)} output tokens` : 'No tokens recorded'}
->
-  {#if total === 0}
-    <span class="empty" style:height="100%"></span>
-  {:else}
-    {#if cached > 0}<span class="cached" style:flex={cached}></span>{/if}
-    {#if fresh > 0}<span class="fresh" style:flex={fresh}></span>{/if}
-    {#if output > 0}<span class="output" style:flex={output}></span>{/if}
+<div class="mix min-w-10 overflow-hidden rounded-full bg-muted" style={`height: ${height}px`} role="img" aria-label={total ? `${exact(cached)} cached input, ${exact(fresh)} fresh input, ${exact(output)} output tokens` : 'No tokens recorded'}>
+  {#if total > 0}
+    <Chart.Container {config} class="h-full w-full aspect-auto">
+      <BarChart {data} {series} orientation="horizontal" y="group" seriesLayout="stack"
+        xDomain={[0, total]} xNice={false} bandPadding={0} axis={false} grid={false} rule={false} highlight={false}
+        tooltipContext={false} motion="none" padding={{ top: 0, bottom: 0, left: 0, right: 0 }} props={{ bars: { radius: 0 } }} />
+    </Chart.Container>
   {/if}
 </div>
-
-<style>
-  .mix { display: flex; overflow: hidden; background: var(--bg3); min-width: 40px; }
-  .mix.gap { gap: 2px; }
-  .mix span { display: block; min-width: 2px; }
-  .cached { background: var(--cached); }
-  .fresh { background: var(--fresh); }
-  .output { background: var(--output); }
-  .empty { background: transparent; flex: 1; }
-</style>

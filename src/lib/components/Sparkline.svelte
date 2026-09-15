@@ -1,24 +1,17 @@
 <script lang="ts">
+  import { AreaChart } from 'layerchart';
+  import * as Chart from '$lib/components/ui/chart/index.js';
   import { fmt } from '$lib/format';
-  let { values, width = 120, height = 30, color = 'var(--brand)' }: { values: number[]; width?: number; height?: number; color?: string } = $props();
-  const pad = 3;
-  const points = $derived.by(() => {
-    if (values.length < 2) return '';
-    const peak = Math.max(...values, 1);
-    return values.map((v, i) => {
-      const x = pad + (i / (values.length - 1)) * (width - 2 * pad);
-      const y = height - pad - (v / peak) * (height - 2 * pad);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-  });
-  const area = $derived(points ? `${pad},${height - pad} ${points} ${width - pad},${height - pad}` : '');
-  const last = $derived(values.length ? values[values.length - 1] : null);
+  let { values, width = 120, height = 30, color = 'var(--chart-1)' }: { values: number[]; width?: number; height?: number; color?: string } = $props();
+  const data = $derived(values.map((tokens, index) => ({ request: index + 1, tokens })));
+  const config = $derived({ tokens: { label: 'Tokens per request', color } } satisfies Chart.ChartConfig);
 </script>
 
 {#if values.length > 1}
-  <svg viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="Tokens per request, oldest to newest; latest {fmt(last)}">
-    <polygon points={area} fill={color} opacity="0.09" />
-    <polyline {points} fill="none" stroke={color} stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
-    <circle cx={width - pad} cy={height - pad - (last! / Math.max(...values, 1)) * (height - 2 * pad)} r="2.4" fill={color} />
-  </svg>
+  <Chart.Container {config} class="aspect-auto" style={`width: ${width}px; height: ${height}px; max-width: 100%`} role="img" aria-label={`Tokens per request, oldest to newest; latest ${fmt(values.at(-1))}`}>
+    <AreaChart {data} x="request" y="tokens" yDomain={[0, Math.max(1, ...values)]}
+      series={[{ key: 'tokens', color, label: config.tokens.label }]}
+      axis={false} grid={false} rule={false} highlight={false} tooltipContext={false} motion="none"
+      padding={{ top: 2, bottom: 2, left: 2, right: 2 }} />
+  </Chart.Container>
 {/if}

@@ -1,16 +1,13 @@
 <script lang="ts">
-  let { value, size = 92, stroke = 9, color = 'var(--brand)', track = 'var(--bg3)' }: { value: number; size?: number; stroke?: number; color?: string; track?: string } = $props();
-  const radius = $derived(50 - stroke);
-  const circumference = $derived(2 * Math.PI * radius);
+  import { ArcChart } from 'layerchart';
+  import * as Chart from '$lib/components/ui/chart/index.js';
+  let { value, size = 92, stroke = 9, color = 'var(--chart-2)', track = 'var(--muted)', label = 'Usage' }: { value: number; size?: number; stroke?: number; color?: string; track?: string; label?: string } = $props();
+  const config = $derived({ value: { label, color } } satisfies Chart.ChartConfig);
+  const data = $derived([{ key: 'value', label, value: Math.min(100, Math.max(0, value)) }]);
 </script>
 
-<svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label={`${Math.round(value)} percent`}>
-  <circle cx="50" cy="50" r={radius} fill="none" stroke={track} stroke-width={stroke} />
-  <circle
-    cx="50" cy="50" r={radius} fill="none"
-    stroke={color} stroke-width={stroke} stroke-linecap="round"
-    stroke-dasharray={circumference}
-    stroke-dashoffset={circumference * (1 - Math.min(1, Math.max(0, value / 100)))}
-    transform="rotate(-90 50 50)"
-  />
-</svg>
+<Chart.Container {config} class="aspect-square" style={`width: ${size}px; height: ${size}px`} role="img" aria-label={`${label}: ${Math.round(value)} out of 100`}>
+  <ArcChart {data} maxValue={100} innerRadius={size / 2 - stroke - 3} outerRadius={size / 2 - 3}
+    series={[{ key: 'value', label, color }]} motion="none" tooltipContext={false}
+    props={{ arc: { track: { fill: track, fillOpacity: 1 } } }} />
+</Chart.Container>
