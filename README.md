@@ -1,6 +1,6 @@
 # MyLimits
 
-A local Codex dashboard built with Bun and SvelteKit. Compare saved thread usage, token composition, context pressure, and recent request shape. No MyLimits account or database.
+A local Codex usage coach and thread dashboard built with Bun and SvelteKit. Ask where your tokens went, spot expensive patterns, and inspect saved thread usage. No MyLimits account or database.
 
 ```sh
 bun install
@@ -19,17 +19,21 @@ bun run build
 
 The binary embeds Bun and all web assets. It runs outside this repository without Bun, Node, or `node_modules`; Codex must still be installed.
 
+## Usage coach
+
+The coach uses an ephemeral, read-only Codex app-server thread and receives a compact snapshot of the 30 highest-usage threads updated today. It remembers follow-up questions while MyLimits is running, cannot call tools, and does not appear in saved thread history. Its own model turns consume Codex usage.
+
 ## Saved thread stats
 
-Today selects threads whose latest saved update falls on the current UTC date. Recent threads shows the newest 100 non-archived threads. Search matches title, project, model, or thread ID.
+Project pills filter the newest 100 non-archived threads. They start in most-recently-active order and keep that order while the page stays open.
 
 Each full-width row uses the saved thread title returned by Codex, then Codex's generated `thread_name`, then the first 48 characters of the thread prompt preview. Threads without any of those are labeled `Untitled thread`.
 
-The left side shows whole-thread totals, turns, model calls, and cache share. The middle graph separates cached input, uncached input, and output. The right side compares the latest request with the model context window and graphs up to 12 recent saved model calls. Cached input is part of input; reasoning output is part of output, not an extra token charge. Expand the details for exact counts and paths. Missing counters remain unknown, never zero.
+Each row graphs recent requests, cached and uncached input, output, and latest context use. Cached input is part of input; reasoning output is part of output, not an extra token charge. Missing counters remain unknown, never zero.
 
 On initial load and manual Refresh, MyLimits starts a short-lived `codex app-server --stdio`, requests `thread/list`, reads generated names from `session_index.jsonl`, and reads token counters from the saved rollout paths returned by Codex. The latest valid `total_token_usage` snapshot replaces earlier snapshots. Repeated snapshots are not summed. Files stream line by line; incomplete JSON lines are skipped. Changed files are reread; unchanged counters are cached in memory.
 
-There is no live-thread discovery, status subscription, account usage/limits request, automatic data polling, or thread mutation. The server process closes after each read. Account limits/history and the previous `--connect` / `--socket` options have been removed. No dollar estimates are calculated. Saved rollouts are a Codex implementation detail and may change with future versions; the format was checked against local Codex 0.154.0 data.
+There is no live-thread discovery, account usage/limits request, automatic data polling, or thread mutation. No dollar estimates are calculated. Saved rollouts are a Codex implementation detail and may change with future versions; the format was checked against local Codex 0.154.0 data.
 
 ## npm / npx
 

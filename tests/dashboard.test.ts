@@ -3,11 +3,12 @@ import { mkdtemp, rm, appendFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Rpc } from '../server/rpc';
-import { createDashboard, readGeneratedTitles } from '../server/dashboard';
+import { createDashboard, readGeneratedTitles, readTranscript } from '../server/dashboard';
 import { createUsageReader, parseUsage } from '../server/usage';
-import { sumThreadUsage, todayThreads } from '../src/lib/today';
-import type { Thread } from '../src/lib/types';
+import { activeProjects, efficiencyPressure, estimatedApiCost, estimatedCredits, sumThreadUsage, todayThreads, workflowPressure } from '../src/lib/today';
+import type { Snapshot, Thread, UsageMetrics } from '../src/lib/types';
 import { makeFixture, tokenLine } from './fixture';
+import { usagePrompt } from '../server/assistant';
 
 test('saved stats use the latest cumulative counter, tolerate partial lines, refresh changed files, and keep unknown distinct from zero', async () => {
   const root = await mkdtemp(join(tmpdir(), 'mylimits-usage-'));
@@ -26,6 +27,19 @@ test('saved stats use the latest cumulative counter, tolerate partial lines, ref
     expect((await read(join(root, 'missing'))).usageError).toBeTruthy();
     expect(parseUsage({ total_tokens: -1, input_tokens: 0, output_tokens: 0 })).toBeNull();
     expect(parseUsage({ total_tokens: 100, input_tokens: 80, output_tokens: 20, cached_input_tokens: 90 })?.cachedInputTokens).toBeNull();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('usage deltas stay with the model that produced them', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mylimits-models-'));
+  const path = join(root, 'thread.jsonl');
+  const context = (model: string) => JSON.stringify({ type: 'turn_context', payload: { model } });
+  try {
+    await Bun.write(path, [context('gpt-5.6-sol'), tokenLine(80, 20, 40), context('gpt-5.6-luna'), tokenLine(240, 60, 100)].join('\n'));
+    const usage = (await createUsageReader()(path)).usage!;
+    expect(usage.totalTokens).toBe(300);
+    expect(usage.byModel['gpt-5.6-sol'].totalTokens).toBe(100);
+    expect(usage.byModel['gpt-5.6-luna'].totalTokens).toBe(200);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -50,6 +64,8 @@ test('dashboard reads saved thread metadata and logs without any live or account
     expect(dashboard.state.threads[0]).not.toHaveProperty('path');
     expect(dashboard.state.threads[0]).not.toHaveProperty('status');
     expect(dashboard.state).not.toHaveProperty('limits');
+    expect(await dashboard.inspectThread('build')).toBe('');
+    expect(await dashboard.inspectThread('missing')).toBeNull();
     await dashboard.refresh();
     expect(dashboard.state.error).toBeNull();
     await expect(rpc.request('thread/list')).rejects.toThrow('not connected');
@@ -65,6 +81,15 @@ test('generated title index ignores invalid lines and empty names', async () => 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test('thread transcript keeps user and assistant text only', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mylimits-transcript-'));
+  const path = join(root, 'thread.jsonl');
+  try {
+    await Bun.write(path, [JSON.stringify({ type: 'event_msg', payload: { type: 'user_message', message: 'Why is this slow?' } }), JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'The context is large.' }] } }), tokenLine(10, 2, 4)].join('\n'));
+    expect(await readTranscript(path)).toBe('user: Why is this slow?\n\nassistant: The context is large.');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('Today selects saved updates by UTC date only', () => {
   const now = Date.parse('2026-09-13T00:01:00Z');
   const threads = [{ id: 'old', updatedAt: (now - 120000) / 1000 }, { id: 'today', updatedAt: (now - 60000) / 1000 }, { id: 'tomorrow', updatedAt: (now + 86400000) / 1000 }] as Thread[];
@@ -75,4 +100,27 @@ test('Today selects saved updates by UTC date only', () => {
 test('daily summary adds recorded thread usage', () => {
   const usage = { totalTokens: 100, inputTokens: 80, cachedInputTokens: 60, outputTokens: 20, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 1, modelCalls: 2, recentRequests: [] };
   expect(sumThreadUsage([{ usage }, { usage: { ...usage, cachedInputTokens: null } }, { usage: null }] as Thread[])).toEqual({ total: 200, cached: 60, input: 100, output: 40, calls: 4 });
+});
+
+test('projects follow latest thread activity and appear once', () => {
+  const threads = [{ cwd: '/old', updatedAt: 1 }, { cwd: '/new', updatedAt: 3 }, { cwd: '/old', updatedAt: 2 }] as Thread[];
+  expect(activeProjects(threads)).toEqual(['/new', '/old']);
+});
+
+test('efficiency pressure makes the same waste riskier on expensive models', () => {
+  const usage = { totalTokens: 200000, inputTokens: 180000, cachedInputTokens: 0, outputTokens: 20000, reasoningOutputTokens: 0, last: { totalTokens: 180000 }, modelContextWindow: 258400, turns: 4, modelCalls: 4, recentRequests: [150000, 180000] } as UsageMetrics;
+  expect(efficiencyPressure(usage, 'gpt-6-astra')).toBeGreaterThanOrEqual(60);
+  expect(efficiencyPressure(usage, 'gpt-5.6-luna')).toBeLessThan(60);
+  expect(estimatedCredits(usage, 'gpt-6-astra')).toBeGreaterThan(estimatedCredits(usage, 'gpt-5.6-luna')!);
+  expect(estimatedApiCost(usage, 'gpt-6-astra')).toBe(estimatedCredits(usage, 'gpt-6-astra')! / 25);
+  expect(workflowPressure([{ model: 'gpt-6-astra', usage }, { model: 'gpt-5.6-luna', usage }] as Thread[])).toBeGreaterThan(efficiencyPressure(usage, 'gpt-5.6-luna')!);
+});
+
+test('assistant context keeps the costliest today threads first', () => {
+  const now = Date.parse('2026-09-13T12:00:00Z');
+  const metrics = { totalTokens: 100, inputTokens: 80, cachedInputTokens: 60, outputTokens: 20, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 1, modelCalls: 2, recentRequests: [] };
+  const usage = { ...metrics, byModel: { 'gpt-5.4': metrics } };
+  const thread = { id: 'a', title: 'Small', cwd: '/a', modelProvider: 'openai', updatedAt: now / 1000, usageError: null, usage };
+  const snapshot: Snapshot = { error: null, updatedAt: now, hasMore: false, threads: [thread, { ...thread, id: 'b', title: 'Large', cwd: '/b', usage: { ...usage, totalTokens: 500 } }] };
+  expect(usagePrompt('What cost most?', snapshot, now).indexOf('Large')).toBeLessThan(usagePrompt('What cost most?', snapshot, now).indexOf('Small'));
 });

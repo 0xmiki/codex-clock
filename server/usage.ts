@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
-import type { TokenBreakdown, Usage } from '../src/lib/types';
+import type { TokenBreakdown, Usage, UsageMetrics } from '../src/lib/types';
 
 const counter = (value: unknown): number | null => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 export function parseUsage(value: any): TokenBreakdown | null {
@@ -16,47 +16,66 @@ export function parseUsage(value: any): TokenBreakdown | null {
 
 export function createUsageReader() {
   const cache = new Map<string, { size: number; mtime: number; usage: Usage | null }>();
-  return async (path: string | null | undefined): Promise<{ usage: Usage | null; usageError: string | null }> => {
+  return async (path: string | null | undefined, fallbackModel = 'unknown'): Promise<{ usage: Usage | null; usageError: string | null }> => {
     if (!path) return { usage: null, usageError: 'No saved usage file available.' };
     try {
       const info = await stat(path);
       const saved = cache.get(path);
       if (saved?.size === info.size && saved.mtime === info.mtimeMs) return { usage: saved.usage, usageError: null };
-      let total: TokenBreakdown | null = null;
-      let last: TokenBreakdown | null = null;
-      let modelContextWindow: number | null = null;
-      let turns = 0;
-      let modelCalls = 0;
-      const recentRequests: number[] = [];
+      const blank = (): UsageMetrics => ({ totalTokens: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 0, modelCalls: 0, recentRequests: [] });
+      const total = blank();
+      const byModel: Record<string, UsageMetrics> = {};
+      let previous: TokenBreakdown | null = null;
+      let currentModel = fallbackModel;
+      let sawUsage = false;
+      const add = (target: UsageMetrics, value: TokenBreakdown) => {
+        target.totalTokens += value.totalTokens; target.inputTokens += value.inputTokens; target.outputTokens += value.outputTokens;
+        target.cachedInputTokens = target.cachedInputTokens === null || value.cachedInputTokens === null ? null : target.cachedInputTokens + value.cachedInputTokens;
+        target.reasoningOutputTokens = target.reasoningOutputTokens === null || value.reasoningOutputTokens === null ? null : target.reasoningOutputTokens + value.reasoningOutputTokens;
+      };
       // ponytail: stream a changed file in full; switch to tail offsets if large logs make manual refresh slow.
       const input = createReadStream(path, { encoding: 'utf8' });
       const lines = createInterface({ input, crlfDelay: Infinity });
       try {
         for await (const line of lines) {
-          if (!line.includes('token_count') && !line.includes('task_started')) continue;
           let record;
           try { record = JSON.parse(line); } catch { continue; } // A writer may leave a partial final line.
+          const nextModel = record?.type === 'turn_context' ? record.payload?.model : record?.type === 'world_state' ? record.payload?.state?.model : null;
+          if (typeof nextModel === 'string' && nextModel) { currentModel = nextModel; continue; }
           if (record?.type === 'event_msg' && record.payload?.type === 'task_started') {
-            turns++;
+            total.turns++;
+            (byModel[currentModel] ||= blank()).turns++;
             continue;
           }
           if (record?.type !== 'event_msg' || record.payload?.type !== 'token_count') continue;
           const nextTotal = parseUsage(record.payload.info?.total_token_usage);
           const nextLast = parseUsage(record.payload.info?.last_token_usage);
           const nextWindow = counter(record.payload.info?.model_context_window);
-          if (nextTotal && nextTotal.totalTokens !== total?.totalTokens) {
-            modelCalls++;
+          if (nextTotal && nextTotal.totalTokens !== previous?.totalTokens) {
+            const reset = !previous || nextTotal.totalTokens < previous.totalTokens || nextTotal.inputTokens < previous.inputTokens || nextTotal.outputTokens < previous.outputTokens;
+            const delta: TokenBreakdown = reset ? nextTotal : {
+              totalTokens: nextTotal.totalTokens - previous!.totalTokens,
+              inputTokens: nextTotal.inputTokens - previous!.inputTokens,
+              outputTokens: nextTotal.outputTokens - previous!.outputTokens,
+              cachedInputTokens: nextTotal.cachedInputTokens === null || previous!.cachedInputTokens === null ? null : nextTotal.cachedInputTokens - previous!.cachedInputTokens,
+              reasoningOutputTokens: nextTotal.reasoningOutputTokens === null || previous!.reasoningOutputTokens === null ? null : nextTotal.reasoningOutputTokens - previous!.reasoningOutputTokens
+            };
+            const modelUsage = byModel[currentModel] ||= blank();
+            add(total, delta); add(modelUsage, delta);
+            total.modelCalls++; modelUsage.modelCalls++;
             if (nextLast) {
-              recentRequests.push(nextLast.totalTokens);
-              if (recentRequests.length > 12) recentRequests.shift();
+              total.recentRequests.push(nextLast.totalTokens); modelUsage.recentRequests.push(nextLast.totalTokens);
+              if (total.recentRequests.length > 12) total.recentRequests.shift();
+              if (modelUsage.recentRequests.length > 12) modelUsage.recentRequests.shift();
             }
+            sawUsage = true;
           }
-          if (nextTotal) total = nextTotal; // Cumulative snapshots replace, never add to, earlier snapshots.
-          if (nextLast) last = nextLast;
-          if (nextWindow !== null) modelContextWindow = nextWindow;
+          if (nextTotal) previous = nextTotal;
+          if (nextLast) { total.last = nextLast; (byModel[currentModel] ||= blank()).last = nextLast; }
+          if (nextWindow !== null) { total.modelContextWindow = nextWindow; (byModel[currentModel] ||= blank()).modelContextWindow = nextWindow; }
         }
       } finally { lines.close(); input.destroy(); }
-      const usage: Usage | null = total ? { ...total, last, modelContextWindow, turns, modelCalls, recentRequests } : null;
+      const usage: Usage | null = sawUsage ? { ...total, byModel } : null;
       if (cache.size >= 100) cache.delete(cache.keys().next().value!);
       cache.set(path, { size: info.size, mtime: info.mtimeMs, usage });
       return { usage, usageError: null };

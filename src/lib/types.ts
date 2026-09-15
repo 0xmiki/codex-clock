@@ -5,13 +5,14 @@ export type TokenBreakdown = {
   outputTokens: number;
   reasoningOutputTokens: number | null;
 };
-export type Usage = TokenBreakdown & {
+export type UsageMetrics = TokenBreakdown & {
   last: TokenBreakdown | null;
   modelContextWindow: number | null;
   turns: number;
   modelCalls: number;
   recentRequests: number[];
 };
+export type Usage = UsageMetrics & { byModel: Record<string, UsageMetrics> };
 export type Thread = {
   id: string; title: string; cwd: string;
   model?: string | null; modelProvider: string; updatedAt: number;

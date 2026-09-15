@@ -1,7 +1,7 @@
 {
   "name": "mylimits",
   "version": "0.1.0",
-  "description": "A local Codex thread and usage dashboard",
+  "description": "A local Codex usage coach and thread dashboard",
   "type": "module",
   "bin": {
     "mylimits": "bin/mylimits.cjs"

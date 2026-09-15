@@ -8,6 +8,7 @@ export class Rpc {
   private pending = new Map<number, Pending>();
   private child?: ChildProcessWithoutNullStreams;
   private send?: (text: string) => void;
+  private listeners = new Set<(method: string, params: any) => void>();
 
   async connect(options: { executable?: string }) {
     this.close();
@@ -39,6 +40,11 @@ export class Rpc {
     });
   }
 
+  onNotification(listener: (method: string, params: any) => void) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
   private receive(line: string) {
     let message: any;
     try { message = JSON.parse(line); } catch { return; }
@@ -47,7 +53,7 @@ export class Rpc {
     if (message.method && message.id !== undefined) {
       this.send?.(JSON.stringify({ id: message.id, error: { code: -32601, message: 'Read-only monitoring client' } }));
     } else if (message.method) {
-      // Saved-history reader ignores runtime notifications.
+      for (const listener of this.listeners) listener(message.method, message.params);
     } else {
       const pending = this.pending.get(message.id);
       if (!pending) return;
@@ -64,5 +70,5 @@ export class Rpc {
     this.pending.clear();
   }
 
-  close() { this.generation++; this.fail('Connection closed'); this.child?.kill(); this.child = undefined; }
+  close() { this.generation++; this.fail('Connection closed'); this.child?.kill(); this.child = undefined; this.listeners.clear(); }
 }
