@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ChatCircleIcon from 'phosphor-svelte/lib/ChatCircleIcon';
+  import PaperPlaneTiltIcon from 'phosphor-svelte/lib/PaperPlaneTiltIcon';
   import type { Snapshot } from '$lib/types';
   import { coach, askCoach } from '$lib/coach.svelte';
   import { tick } from 'svelte';
@@ -30,7 +32,7 @@
 
 <aside class="coach" aria-label="Limit coach">
   <header>
-    <span class="orb" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M 8.6 23.4 A 10.5 10.5 0 1 1 23.4 23.4" fill="none" stroke="rgba(154,178,216,0.3)" stroke-width="3.4" stroke-linecap="round" /><path d="M 8.6 23.4 A 10.5 10.5 0 1 1 24.5 9.9" fill="none" stroke="#b4f53c" stroke-width="3.4" stroke-linecap="round" /><circle cx="24.5" cy="9.9" r="2.6" fill="#b4f53c" /></svg></span>
+    <span class="orb" aria-hidden="true"><ChatCircleIcon size={24} weight="duotone" /></span>
     <div>
       <h1>Limit coach</h1>
       <p>Where did your limits go?</p>
@@ -55,7 +57,7 @@
   <form class="ask" onsubmit={submit}>
     <textarea bind:value={question} maxlength="500" rows="2" placeholder="Ask about today’s usage, expensive threads, or better habits" aria-label="Ask your limit coach" onkeydown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void submit(); } }}></textarea>
     <button disabled={coach.asking || !ready || !question.trim()} aria-label="Send question">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8 14 2 9.5 14 7.5 8.8 2 8Z" fill="currentColor" /></svg>
+      <PaperPlaneTiltIcon size={18} weight="fill" aria-hidden="true" />
     </button>
   </form>
   <p class="fineprint">Answers come from a read-only Codex thread on this machine. Its turns consume your usage.</p>
@@ -74,7 +76,7 @@
     display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0;
     border-radius: 12px; background: var(--bg0); border: 1px solid var(--line);
   }
-  .orb svg { width: 24px; height: 24px; }
+  .orb { color: var(--brand); }
   h1 { margin: 0; font: 600 16px/1.2 var(--font-display); letter-spacing: -0.2px; }
   header p { margin: 2px 0 0; color: var(--ink-faint); font-size: 12px; }
 
@@ -103,6 +105,5 @@
     border: 0; border-radius: var(--radius-control); background: var(--brand); color: var(--brand-ink);
   }
   .ask button:hover:not(:disabled) { filter: brightness(1.08); }
-  .ask button svg { width: 16px; height: 16px; }
   .fineprint { margin: 0; color: var(--ink-faint); font-size: 10.5px; line-height: 1.5; }
 </style>

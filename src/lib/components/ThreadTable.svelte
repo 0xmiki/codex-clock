@@ -1,4 +1,11 @@
 <script lang="ts">
+  import MagnifyingGlassIcon from 'phosphor-svelte/lib/MagnifyingGlassIcon';
+  import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon';
+  import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon';
+  import CaretUpIcon from 'phosphor-svelte/lib/CaretUpIcon';
+  import RobotIcon from 'phosphor-svelte/lib/RobotIcon';
+  import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
+  import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
   import type { Thread } from '$lib/types';
   import { cacheRate, threadApiCost, threadPressure } from '$lib/today';
   import { fmt, exact, money, percent, pressureLabel, pressureTone, project, relativeTime, fullTime } from '$lib/format';
@@ -45,7 +52,6 @@
     });
   });
 
-  const arrow = (key: SortKey) => (sortKey === key ? (sortDesc ? '▼' : '▲') : '▼');
   const isOn = (key: SortKey) => sortKey === key;
   const ariaSort = (key: SortKey) => (sortKey === key ? (sortDesc ? 'descending' : 'ascending') : 'none');
 
@@ -70,7 +76,7 @@
       <p>{threads.length} saved {threads.length === 1 ? 'thread' : 'threads'}{search && sorted.length !== threads.length ? ` · ${sorted.length} matching` : ''}</p>
     </div>
     <label class="search">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="m10.6 10.6 3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+      <MagnifyingGlassIcon size={14} aria-hidden="true" />
       <input type="search" placeholder="Search titles, projects, models, ids…" bind:value={search} aria-label="Search threads" />
     </label>
   </header>
@@ -81,23 +87,23 @@
         <tr>
           <th class="session-col" scope="col">Session</th>
           <th scope="col" aria-sort={ariaSort('project')}>
-            <button class="sort" onclick={() => sortBy('project')} title="Sort by project">Project<span class="arrow" class:on={isOn('project')} aria-hidden="true">{arrow('project')}</span></button>
+            <button class="sort" onclick={() => sortBy('project')} title="Sort by project">Project<span class="arrow" class:on={isOn('project')} aria-hidden="true">{#if isOn('project') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></button>
           </th>
           <th scope="col" class="numeric" aria-sort={ariaSort('tokens')}>
-            <button class="sort" onclick={() => sortBy('tokens')} title="Cumulative tokens for the whole session">Tokens<span class="arrow" class:on={isOn('tokens')} aria-hidden="true">{arrow('tokens')}</span></button>
+            <button class="sort" onclick={() => sortBy('tokens')} title="Cumulative tokens for the whole session">Tokens<span class="arrow" class:on={isOn('tokens')} aria-hidden="true">{#if isOn('tokens') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></button>
           </th>
           <th scope="col" class="numeric" aria-sort={ariaSort('cache')}>
-            <button class="sort" onclick={() => sortBy('cache')} title="Share of input served from cache — higher is cheaper">Cache<span class="arrow" class:on={isOn('cache')} aria-hidden="true">{arrow('cache')}</span></button>
+            <button class="sort" onclick={() => sortBy('cache')} title="Share of input served from cache — higher is cheaper">Cache<span class="arrow" class:on={isOn('cache')} aria-hidden="true">{#if isOn('cache') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></button>
           </th>
           <th scope="col" class="numeric" aria-sort={ariaSort('cost')}>
-            <button class="sort" onclick={() => sortBy('cost')} title="API-equivalent estimate from OpenAI token prices; not your Codex subscription charge">≈ API<span class="arrow" class:on={isOn('cost')} aria-hidden="true">{arrow('cost')}</span></button>
+            <button class="sort" onclick={() => sortBy('cost')} title="API-equivalent estimate from OpenAI token prices; not your Codex subscription charge">≈ API<span class="arrow" class:on={isOn('cost')} aria-hidden="true">{#if isOn('cost') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></button>
           </th>
           <th scope="col" class="numeric" aria-sort={ariaSort('pressure')}>
-            <button class="sort" onclick={() => sortBy('pressure')} title="0–100 efficiency score combining model price, cache reuse, context use, and request size. 60+ is high.">Pressure<span class="arrow" class:on={isOn('pressure')} aria-hidden="true">{arrow('pressure')}</span></button>
+            <button class="sort" onclick={() => sortBy('pressure')} title="0–100 efficiency score combining model price, cache reuse, context use, and request size. 60+ is high.">Pressure<span class="arrow" class:on={isOn('pressure')} aria-hidden="true">{#if isOn('pressure') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></button>
           </th>
           <th scope="col" class="numeric" title="Latest request as a share of the model context window">Context</th>
           <th scope="col" class="numeric" aria-sort={ariaSort('when')}>
-            <button class="sort" onclick={() => sortBy('when')} title="Sort by last saved update">Updated<span class="arrow" class:on={isOn('when')} aria-hidden="true">{arrow('when')}</span></button>
+            <button class="sort" onclick={() => sortBy('when')} title="Sort by last saved update">Updated<span class="arrow" class:on={isOn('when')} aria-hidden="true">{#if isOn('when') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></button>
           </th>
           <th scope="col" class="spark-col" title="Tokens per request, oldest to newest">Requests</th>
         </tr>
@@ -108,13 +114,15 @@
           {@const contextPercent = thread.usage?.last && thread.usage.modelContextWindow ? Math.min(100, Math.round(thread.usage.last.totalTokens / thread.usage.modelContextWindow * 100)) : null}
           {@const tone = values.pressure !== null ? pressureTone(values.pressure) : null}
           {@const requests = thread.usage?.recentRequests ?? []}
-          <tr class="main-row" class:open={expandedId === thread.id} class:subagent={Boolean(thread.parentThreadId)} onclick={() => toggle(thread.id)}>
+          <tr class="main-row" class:open={expandedId === thread.id} onclick={() => toggle(thread.id)}>
             <td class="session-col">
               <button class="disclose" aria-expanded={expandedId === thread.id} onclick={event => { event.stopPropagation(); toggle(thread.id); }}>
-                <span class="chevron" aria-hidden="true">▸</span>
+                <span class="chevron" aria-hidden="true"><CaretRightIcon size={12} weight="fill" /></span>
                 <span class="title" title={thread.title}>{thread.title}</span>
+                {#if thread.parentThreadId}
+                  <span class="subagent-icon" title="Subagent"><RobotIcon size={16} aria-label="Subagent" /></span>
+                {/if}
               </button>
-              {#if thread.parentThreadId}<span class="badge sub">subagent</span>{/if}
               {#if values.models.length > 1}<span class="badge">{values.models.length} models</span>{/if}
             </td>
             <td class="proj" title={thread.cwd}>{project(thread.cwd)}</td>
@@ -196,7 +204,7 @@
                       <p class="path" title={thread.cwd}>{thread.cwd}</p>
                       <p class="meta">{thread.modelProvider}{thread.model ? ` · ${thread.model}` : ''}</p>
                       <div class="detail-actions">
-                        <button class="ghost" onclick={() => void copyRef(thread.id)} title="Copy a reference the coach understands">{copiedId === thread.id ? 'Copied ✓' : `thread:${thread.id.slice(0, 8)}`}</button>
+                        <button class="ghost" onclick={() => void copyRef(thread.id)} title="Copy a reference the coach understands">{#if copiedId === thread.id}<CheckIcon size={14} aria-hidden="true" />Copied{:else}<CopyIcon size={14} aria-hidden="true" />thread:{thread.id.slice(0, 8)}{/if}</button>
                         {#if (values.pressure ?? 0) >= 60}
                           <button class="danger" onclick={() => void askCoach(`Why is “${thread.title}” above 60 pressure? Inspect its transcript and give me specific changes.`, thread.id)}>Ask the coach why</button>
                         {/if}
@@ -226,7 +234,7 @@
   h2 { margin: 0; font: 600 17px/1.3 var(--font-display); letter-spacing: -0.2px; }
   .section-head p { margin: 2px 0 0; color: var(--ink-faint); font-size: 12px; }
   .search { position: relative; display: block; }
-  .search svg { position: absolute; left: 11px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); color: var(--ink-faint); pointer-events: none; }
+  .search :global(svg) { position: absolute; left: 11px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); color: var(--ink-faint); pointer-events: none; }
   .search input {
     width: 300px; max-width: 68vw; padding: 9px 12px 9px 32px;
     border: 1px solid var(--line); border-radius: var(--radius-control);
@@ -245,25 +253,23 @@
   th.numeric .sort { justify-content: flex-end; width: 100%; }
   .sort { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; }
   .sort:hover { color: var(--ink); }
-  .arrow { font-size: 8px; opacity: 0; transition: opacity 0.15s; }
+  .arrow { display: inline-flex; opacity: 0; transition: opacity 0.15s; }
   .sort:hover .arrow, .arrow.on { opacity: 1; color: var(--brand); }
 
   tbody tr.main-row { cursor: pointer; }
   tbody tr.main-row:hover { background: var(--bg2); }
   tbody tr.main-row.open { background: var(--bg2); }
   tbody td { padding: 11px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; min-width: 0; }
-  tr.subagent td:first-child { padding-left: 30px; }
-  tr.subagent .disclose .chevron { opacity: 0.4; }
 
   .disclose { display: flex; align-items: center; gap: 7px; max-width: 360px; padding: 0; border: 0; background: none; text-align: left; }
-  .chevron { color: var(--ink-faint); font-size: 11px; transition: transform 0.15s; flex-shrink: 0; }
+  .chevron { display: inline-flex; color: var(--ink-faint); font-size: 11px; transition: transform 0.15s; flex-shrink: 0; }
   .disclose[aria-expanded='true'] .chevron { transform: rotate(90deg); color: var(--brand); }
   .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: 13.5px; font-weight: 500; }
   .badge {
     display: inline-block; margin: 4px 0 0 18px; padding: 1px 8px; border-radius: 99px;
     background: var(--bg3); color: var(--ink-dim); font: 600 10px var(--font-data);
   }
-  .badge.sub { background: rgba(143, 138, 244, 0.14); color: #b6b3fa; }
+  .subagent-icon { display: inline-flex; flex-shrink: 0; color: #b6b3fa; }
   .proj { color: var(--ink-dim); font: 400 12.5px var(--font-ui); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .num { font: 500 12.5px var(--font-data); font-variant-numeric: tabular-nums; color: var(--ink); }
@@ -305,7 +311,7 @@
   .model-sub { grid-column: 1 / -1; color: var(--ink-faint); font-size: 11px; }
   .path { margin: 0; color: var(--ink-dim); font: 400 11.5px var(--font-data); overflow-wrap: anywhere; }
   .detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-  .ghost { padding: 7px 12px; border: 1px dashed var(--line); border-radius: var(--radius-control); background: none; color: var(--ink-dim); font: 500 11.5px var(--font-data); }
+  .ghost { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px dashed var(--line); border-radius: var(--radius-control); background: none; color: var(--ink-dim); font: 500 11.5px var(--font-data); }
   .ghost:hover { color: var(--ink); border-color: var(--ink-faint); }
   .danger { padding: 7px 12px; border: 1px solid rgba(244, 118, 94, 0.4); border-radius: var(--radius-control); background: var(--danger-bg); color: var(--bad); font-size: 12px; }
   .danger:hover { background: rgba(244, 118, 94, 0.16); }

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import ArrowClockwiseIcon from 'phosphor-svelte/lib/ArrowClockwiseIcon';
+  import ChatCircleIcon from 'phosphor-svelte/lib/ChatCircleIcon';
+  import ShieldCheckIcon from 'phosphor-svelte/lib/ShieldCheckIcon';
   import '$lib/fonts.css';
   import '$lib/theme.css';
   import { onMount } from 'svelte';
@@ -83,14 +86,14 @@
     {:else}
       <span class="chip"><i aria-hidden="true" class="pulse"></i>Connecting…</span>
     {/if}
-    <span class="chip privacy" title="MyLimits reads saved Codex files on this machine and talks only to localhost">100% local</span>
+    <span class="chip privacy" title="MyLimits reads saved Codex files on this machine and talks only to localhost"><ShieldCheckIcon size={12} aria-hidden="true" />100% local</span>
   </div>
   <div class="actions">
     <button class="tool" onclick={refresh} disabled={refreshing}>
-      <svg viewBox="0 0 16 16" aria-hidden="true" class:spin={refreshing}><path d="M13.6 8a5.6 5.6 0 1 1-1.7-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /><path d="M12.3 1v3.2H9.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      <span class="refresh-icon" class:spin={refreshing}><ArrowClockwiseIcon size={14} aria-hidden="true" /></span>
       {refreshing ? 'Reading…' : 'Refresh'}
     </button>
-    <button class="tool" class:on={coach.open} aria-pressed={coach.open} onclick={() => coach.open = !coach.open}>Coach</button>
+    <button class="tool" class:on={coach.open} aria-pressed={coach.open} onclick={() => coach.open = !coach.open}><ChatCircleIcon size={14} aria-hidden="true" />Coach</button>
   </div>
 </header>
 
@@ -174,7 +177,6 @@
   .chip.live i { background: var(--brand); box-shadow: 0 0 7px var(--brand); }
   .chip.warn i { background: var(--bad); }
   .chip.privacy { color: var(--ink-faint); }
-  .chip.privacy::before { content: '●'; font-size: 6px; color: var(--cached); }
   .pulse { animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.3; } }
   .actions { margin-left: auto; display: flex; gap: 8px; }
@@ -186,8 +188,8 @@
   }
   .tool:hover:not(:disabled) { border-color: var(--ink-faint); color: var(--ink); }
   .tool.on { border-color: rgba(180, 245, 60, 0.55); color: var(--brand); background: var(--brand-glow); }
-  .tool svg { width: 13px; height: 13px; }
-  .tool svg.spin { animation: spin 0.9s linear infinite; }
+  .refresh-icon { display: inline-flex; }
+  .refresh-icon.spin { animation: spin 0.9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .shell { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; padding: 22px 28px 30px; max-width: 2200px; margin: 0 auto; }
