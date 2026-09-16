@@ -1,11 +1,8 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card/index.js';
-  import { Button } from '$lib/components/ui/button/index.js';
-  import { Textarea } from '$lib/components/ui/textarea/index.js';
   import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
-  import { Separator } from '$lib/components/ui/separator/index.js';
-  import ChatCircleIcon from 'phosphor-svelte/lib/ChatCircleIcon';
-  import PaperPlaneTiltIcon from 'phosphor-svelte/lib/PaperPlaneTiltIcon';
+  import ArrowUpIcon from 'phosphor-svelte/lib/ArrowUpIcon';
+  import XIcon from 'phosphor-svelte/lib/XIcon';
   import type { Snapshot } from '$lib/types';
   import { coach, askCoach } from '$lib/coach.svelte';
   import { tick } from 'svelte';
@@ -13,16 +10,11 @@
   let { snapshot }: { snapshot: Snapshot | null } = $props();
   let question = $state('');
   let log = $state<HTMLElement | null>(null);
-  const ready = $derived(Boolean(snapshot));
-
-  const suggestions = [
-    'What consumed the most tokens today?',
-    'Which usage patterns should I change?',
-    'How can I save tokens tomorrow?'
-  ];
+  const ready = $derived(Boolean(snapshot && !snapshot.error));
 
   async function submit(event?: SubmitEvent) {
     event?.preventDefault();
+    if (!ready || coach.asking || !question.trim()) return;
     const text = question;
     question = '';
     await askCoach(text);
@@ -35,28 +27,56 @@
   });
 </script>
 
-<Card.Root class="coach min-h-0 gap-4 p-5" role="complementary" aria-label="Limit coach">
-  <Card.Header class="flex flex-row items-center gap-3 p-0">
-    <span class="flex size-10 shrink-0 items-center justify-center border bg-muted text-primary" aria-hidden="true"><ChatCircleIcon size={24} weight="duotone" /></span>
-    <div><Card.Title>Limit coach</Card.Title><Card.Description>Where did your limits go?</Card.Description></div>
-  </Card.Header>
-  <div class="flex flex-wrap gap-2" aria-label="Suggested questions">
-    {#each suggestions as suggestion (suggestion)}
-      <Button variant="outline" size="sm" class="h-auto whitespace-normal py-2 text-left" onclick={() => void askCoach(suggestion)} disabled={coach.asking || !ready}>{suggestion}</Button>
-    {/each}
+<Card.Root id="ask-panel" class="coach min-h-0 gap-0 overflow-hidden rounded-xl p-0" role="complementary" aria-label="Ask">
+  <div class="ask-header">
+    <div><h2>Ask</h2><span>Your usage, explained</span></div>
+    <button class="close" aria-label="Close Ask" onclick={() => coach.open = false}><XIcon size={18} /></button>
   </div>
-  <Separator />
   <ScrollArea class="min-h-0 flex-1" bind:viewportRef={log}>
-    <div class="flex flex-col gap-3 pr-3" aria-live="polite">
+    <div class="messages" role="log" aria-label="Usage conversation" aria-live="polite">
       {#each coach.messages as message, index (index)}
-        <p class={message.role === 'user' ? 'ml-auto max-w-[92%] whitespace-pre-wrap border border-primary/20 bg-primary/10 p-3 text-sm' : 'max-w-[92%] whitespace-pre-wrap border-l-2 border-primary bg-muted p-3 text-sm'}>{message.text}</p>
+        <div class="message" class:user={message.role === 'user'}>
+          <span class="speaker">{message.role === 'user' ? 'You' : 'Ask'}</span>
+          <p>{message.text}</p>
+        </div>
       {/each}
-      {#if coach.asking}<p class="animate-pulse text-sm text-muted-foreground">Reading your usage…</p>{/if}
+      {#if coach.asking}<p class="pending" role="status">Reading usage<span class="animate-pulse">…</span></p>{/if}
     </div>
   </ScrollArea>
-  <form class="grid grid-cols-[1fr_auto] items-end gap-2" onsubmit={submit}>
-    <Textarea class="min-h-20 resize-none" bind:value={question} maxlength={500} rows={2} placeholder="Ask about today’s usage, expensive threads, or better habits" aria-label="Ask your limit coach" onkeydown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void submit(); } }} />
-    <Button type="submit" size="icon" disabled={coach.asking || !ready || !question.trim()} aria-label="Send question"><PaperPlaneTiltIcon weight="fill" aria-hidden="true" /></Button>
-  </form>
-  <p class="text-[11px] text-muted-foreground">Answers come from a read-only Codex thread on this machine. Its turns consume your usage.</p>
+  <div class="compose-area">
+    <form class="composer" onsubmit={submit}>
+      <textarea bind:value={question} maxlength={500} rows={2} placeholder="Ask about your usage…" aria-label="Usage question" onkeydown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); void submit(); } }}></textarea>
+      <div class="composer-tools">
+        <span>{coach.asking ? 'Working…' : 'Usage context included'}</span>
+        <button class="send" type="submit" disabled={coach.asking || !ready || !question.trim()} aria-label="Send question"><ArrowUpIcon size={18} weight="bold" /></button>
+      </div>
+    </form>
+    <p class="disclosure">Uses your Codex allowance.</p>
+  </div>
 </Card.Root>
+
+<style>
+  .ask-header { display:flex; align-items:center; justify-content:space-between; padding:20px; border-bottom:1px solid var(--border); }
+  h2 { margin:0; font:600 16px var(--font-sans); }
+  .ask-header span { display:block; margin-top:3px; font-size:11px; color:var(--muted-foreground); }
+  .close { display:grid; place-items:center; width:30px; height:30px; border-radius:8px; color:var(--muted-foreground); background:transparent; cursor:pointer; }
+  .close:hover { background:var(--muted); color:var(--foreground); }
+  .messages { display:flex; flex-direction:column; gap:24px; padding:20px; }
+  .message { min-width:0; }
+  .speaker { display:block; margin-bottom:7px; font-size:10px; font-weight:600; color:var(--muted-foreground); }
+  .message p { margin:0; font-size:13px; line-height:1.7; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .user { align-self:flex-end; max-width:94%; border-radius:12px 12px 3px 12px; padding:12px 14px; background:var(--muted); }
+  .pending { font-size:12px; color:var(--muted-foreground); }
+  .compose-area { padding:16px; }
+  .composer { border:1px solid var(--border); border-radius:14px; background:var(--muted); padding:12px; transition:border-color .15s; }
+  .composer:focus-within { border-color:var(--ring); box-shadow:0 0 0 2px color-mix(in oklch,var(--ring) 15%,transparent); }
+  textarea { display:block; width:100%; min-height:60px; max-height:180px; field-sizing:content; resize:none; border:0; outline:none; padding:0; background:transparent; color:var(--foreground); font:400 13px/1.6 var(--font-sans); }
+  textarea::placeholder { color:var(--muted-foreground); }
+  .composer-tools { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:10px; }
+  .composer-tools span { font-size:10px; color:var(--muted-foreground); }
+  .send { display:grid; place-items:center; width:32px; height:32px; flex-shrink:0; border-radius:50%; background:var(--primary); color:var(--primary-foreground); cursor:pointer; }
+  .send:disabled { opacity:.3; cursor:default; }
+  .send:not(:disabled):hover { opacity:.85; }
+  button:focus-visible { outline:2px solid var(--ring); outline-offset:3px; }
+  .disclosure { margin:9px 0 0; text-align:center; font-size:10px; color:var(--muted-foreground); }
+</style>

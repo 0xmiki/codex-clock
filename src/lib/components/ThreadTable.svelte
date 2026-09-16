@@ -33,7 +33,7 @@
     tokens: thread.usage?.totalTokens ?? null,
     cache: cacheRate(thread.usage),
     cost: threadApiCost(thread),
-    efficiency: efficiencyGrades.get(thread.id) ?? { available: false as const, reason: 'No usage grade available.' },
+    efficiency: efficiencyGrades.get(thread.id) ?? { available: false as const, reason: 'No usage score available.' },
     models: Object.entries(thread.usage?.byModel || {}).filter(([, usage]) => usage.modelCalls > 0)
   });
 
@@ -94,7 +94,7 @@
             <Button variant="ghost" size="sm" class="sort h-auto px-0 py-1 text-[11px]" onclick={() => sortBy('cost')} title="API-equivalent estimate from OpenAI token prices; not your Codex subscription charge">≈ API<span class="arrow" class:on={isOn('cost')} aria-hidden="true">{#if isOn('cost') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></Button>
           </Table.Head>
           <Table.Head scope="col" class="efficiency-col" aria-sort={ariaSort('efficiency')}>
-            <Button variant="ghost" size="sm" class="sort h-auto px-0 py-1 text-[11px]" onclick={() => sortBy('efficiency')} title="Last 5 calls: cost per token compared with other threads on the same model. A ≤1×, B ≤1.5×, C ≤2×, D ≤3×, F >3×.">Efficiency<span class="arrow" class:on={isOn('efficiency')} aria-hidden="true">{#if isOn('efficiency') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></Button>
+            <Button variant="ghost" size="sm" class="sort h-auto px-0 py-1 text-[11px]" onclick={() => sortBy('efficiency')} title="Sort by usage score">Usage Score<span class="arrow" class:on={isOn('efficiency')} aria-hidden="true">{#if isOn('efficiency') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></Button>
           </Table.Head>
           <Table.Head scope="col" class="numeric" title="Latest request as a share of the model context window">Context</Table.Head>
           <Table.Head scope="col" class="numeric" aria-sort={ariaSort('when')}>
@@ -132,7 +132,7 @@
             <Table.Cell class="numeric"><span class="num" class:dim={values.cost === null}>{money(values.cost)}</span></Table.Cell>
             <Table.Cell class="efficiency-col">
               {#if values.efficiency.available}
-                <span class="usage-grade" title={`${values.efficiency.reason} Expand for the calculation.`}>
+                <span class="usage-grade" title={`Usage Score: ${values.efficiency.grade}`}>
                   <span class="grade grade-{values.efficiency.grade.toLowerCase()}">{values.efficiency.grade}</span>
                   <span class="burn-multiplier">{values.efficiency.burnRatio.toFixed(2)}× usage</span>
                 </span>
@@ -208,7 +208,7 @@
                           <Tooltip.Content>Copy a reference the coach understands</Tooltip.Content>
                         </Tooltip.Root>
                         {#if values.efficiency.available && ['D', 'F'].includes(values.efficiency.grade)}
-                          <Button variant="outline" size="sm" onclick={() => void askCoach('Explain this thread’s cost-per-token efficiency grade relative to the same model, and separately its usage per call across models. Use recent input, caching and output. Suggest ways to reduce consumption.', thread.id)}>Review usage</Button>
+                          <Button variant="outline" size="sm" onclick={() => void askCoach('Explain this thread’s cost-per-token Usage Score relative to the same model, and separately its usage per call across models. Use recent input, caching and output. Suggest ways to reduce consumption.', thread.id)}>Review usage</Button>
                         {/if}
                       </div>
                     </div>

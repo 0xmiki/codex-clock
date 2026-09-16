@@ -55,7 +55,7 @@
                 {#if threadApiCost(thread) !== null}<span>{money(threadApiCost(thread))}</span>{/if}
                 {#if efficiency?.available}<b class="grade grade-{efficiency.grade.toLowerCase()}" title={efficiency.reason}>{efficiency.grade}</b>{/if}
                 {#if efficiency?.available && ['D', 'F'].includes(efficiency.grade)}
-                  <Button size="xs" variant="outline" onclick={() => void askCoach('Explain this thread’s cost per token versus the same model, separately from its usage per call across models. Suggest ways to reduce consumption.', thread.id)}>Review grade</Button>
+                  <Button size="xs" variant="outline" onclick={() => void askCoach('Explain this thread’s cost per token versus the same model, separately from its usage per call across models. Suggest ways to reduce consumption.', thread.id)}>Review score</Button>
                 {/if}
               </span>
             </div>
@@ -67,8 +67,8 @@
     {/if}
   </Card.Root>
 
-  <Card.Root class="min-w-0 rounded-xl gap-3 p-5" aria-label="Efficiency grades today">
-    <h2>Thread efficiency</h2>
+  <Card.Root class="min-w-0 rounded-xl gap-3 p-5" aria-label="Usage scores today">
+    <h2>Usage Score</h2>
     {#if cacheRate !== null || grades.available > 0}
       <div class="gauges">
         <div class="gauge">
@@ -77,18 +77,18 @@
           <span class="caption" title="Share of today's input tokens served from cache. Higher is cheaper.">of input served from cache</span>
         </div>
         <div class="gauge">
-          <div class="grade-strip" aria-label="Efficiency grade distribution">
+          <div class="grade-strip" aria-label="Usage score distribution">
             {#each Object.entries(grades.counts) as [grade, count]}
-              <span class="grade grade-{grade.toLowerCase()}" title={`${count} grade ${grade}`}>{grade}<small>{count}</small></span>
+              <span class="grade grade-{grade.toLowerCase()}" title={`${count} score ${grade}`}>{grade}<small>{count}</small></span>
             {/each}
           </div>
-          <span class="label">Thread grades</span>
+          <span class="label">Usage Scores</span>
           <span class="caption">Cost/token: A ≤ normal · F >3× normal</span>
         </div>
       </div>
-      <p class="hint">{grades.available} of {grades.total} threads updated today are graded. Cost per token over the last 5 calls versus up to 30 other recent threads on the same model, across all projects.</p>
+      <p class="hint">{grades.available} of {grades.total} threads updated today have usage scores. Cost per token over the last 5 calls versus up to 30 other recent threads on the same model, across all projects.</p>
     {:else}
-      <p class="empty">Learning your normal usage. Grades need 5 recent priced calls and at least 5 other eligible threads on the same model.</p>
+      <p class="empty">Learning your normal usage. Usage scores need 5 recent priced calls and at least 5 other eligible threads on the same model.</p>
     {/if}
   </Card.Root>
 </div>

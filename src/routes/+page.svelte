@@ -96,7 +96,7 @@
     <Button variant="outline" onclick={refresh} disabled={refreshing}>
       <ArrowClockwiseIcon class={refreshing ? 'animate-spin' : ''} aria-hidden="true" />{refreshing ? 'Reading…' : 'Refresh'}
     </Button>
-    <Button variant={coach.open ? 'secondary' : 'outline'} aria-pressed={coach.open} onclick={() => coach.open = !coach.open}><ChatCircleIcon aria-hidden="true" />Coach</Button>
+    <Button variant={coach.open ? 'secondary' : 'outline'} aria-expanded={coach.open} aria-controls="ask-panel" onclick={() => coach.open = !coach.open}><ChatCircleIcon aria-hidden="true" />Ask</Button>
   </div>
 </header>
 
