@@ -5,6 +5,7 @@ import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { Rpc } from './rpc';
 import { createUsageReader } from './usage';
+import { readProductivity } from './productivity';
 
 export async function readGeneratedTitles(path = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'session_index.jsonl')) {
   const titles = new Map<string, string>();
@@ -60,6 +61,7 @@ export function createDashboard(rpc: Rpc, executable?: string, sessionIndexPath?
           if (t.path) paths.set(t.id, t.path);
         }
         state.threads = threads;
+        state.productivity = await readProductivity(threads);
         state.hasMore = Boolean(listed.nextCursor);
         state.error = null; state.updatedAt = Date.now();
       } catch (error) { state.error = error instanceof Error ? error.message : String(error); }

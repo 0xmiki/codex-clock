@@ -11,6 +11,7 @@
   import { onMount } from 'svelte';
   import Brand from '$lib/components/Brand.svelte';
   import TodayPanel from '$lib/components/TodayPanel.svelte';
+  import Productivity from '$lib/components/Productivity.svelte';
   import TrendChart from '$lib/components/TrendChart.svelte';
   import Standouts from '$lib/components/Standouts.svelte';
   import ThreadTable from '$lib/components/ThreadTable.svelte';
@@ -122,6 +123,7 @@
           <ScrollArea class="h-full">
             <div class="flex min-w-0 flex-col gap-4 p-1 pr-4">
               <TodayPanel total={daily.total} cached={daily.cached} fresh={daily.input} output={daily.output} calls={daily.calls} {turns} sessions={selectedToday.length} cost={dailyCost} projectName={selectedProject ? project(selectedProject) : 'All projects'} />
+              <Productivity projects={data.productivity ?? []} cwd={selectedProject} {now} partial={data.hasMore} />
               <TrendChart {buckets} />
               <Standouts {today} {efficiencyGrades} onSelectProject={selectProject} />
             </div>
