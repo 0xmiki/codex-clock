@@ -42,6 +42,9 @@ type RecentUsage = {
 export type ThreadEfficiency = (Extract<RecentUsage, { available: true }> & {
   grade: EfficiencyGrade;
   normalCost: number;
+  costPerMillion: number;
+  normalCostPerMillion: number;
+  burnRatio: number;
   baselineThreads: number;
   costRatio: number;
   reason: string;
@@ -80,14 +83,22 @@ export function gradeThreads(threads: Thread[]): Map<string, ThreadEfficiency> {
     .toSorted((a, b) => b.thread.updatedAt - a.thread.updatedAt || a.thread.id.localeCompare(b.thread.id));
   return new Map(samples.map(({ thread, usage }): [string, ThreadEfficiency] => {
     if (!usage.available) return [thread.id, usage];
-    const peers = eligible.filter(sample => sample.thread.id !== thread.id).slice(0, BASELINE_THREADS);
-    if (peers.length < MIN_BASELINE_THREADS) return [thread.id, { available: false, reason: 'Need 5 other threads with recent priced calls to learn your normal usage.' }];
-    const costs = peers.map(peer => midpoint(peer.usage.recentCost)).toSorted((a, b) => a - b);
-    const middle = Math.floor(costs.length / 2);
-    const normalCost = costs.length % 2 ? costs[middle] : (costs[middle - 1] + costs[middle]) / 2;
-    if (normalCost <= 0) return [thread.id, { available: false, reason: 'Normal usage is zero; a meaningful usage multiplier is not available yet.' }];
-    const costRatio = midpoint(usage.recentCost) / normalCost;
-    return [thread.id, { ...usage, grade: burnGrade(costRatio), normalCost, baselineThreads: peers.length, costRatio, reason: `${costRatio.toFixed(2)}× your normal estimated usage per call.` }];
+    const tokenRate = (u: Extract<RecentUsage, { available: true }>) => midpoint(u.recentCost) / (u.averageInput + u.averageOutput) * 1_000_000;
+    const median = (values: number[]) => {
+      const sorted = values.toSorted((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+    };
+    const others = eligible.filter(sample => sample.thread.id !== thread.id);
+    const peers = others.filter(sample => sample.usage.model === usage.model && Number.isFinite(tokenRate(sample.usage))).slice(0, BASELINE_THREADS);
+    if (peers.length < MIN_BASELINE_THREADS) return [thread.id, { available: false, reason: 'Need 5 other threads with recent priced calls on the same model to grade efficiency.' }];
+    const costPerMillion = tokenRate(usage);
+    const normalCostPerMillion = median(peers.map(peer => tokenRate(peer.usage)));
+    const normalCost = median(others.slice(0, BASELINE_THREADS).map(peer => midpoint(peer.usage.recentCost)));
+    if (!Number.isFinite(costPerMillion) || normalCostPerMillion <= 0 || normalCost <= 0) return [thread.id, { available: false, reason: 'Not enough nonzero usage to calculate a meaningful comparison.' }];
+    const costRatio = costPerMillion / normalCostPerMillion;
+    const burnRatio = midpoint(usage.recentCost) / normalCost;
+    return [thread.id, { ...usage, grade: burnGrade(costRatio), normalCost, costPerMillion, normalCostPerMillion, burnRatio, baselineThreads: peers.length, costRatio, reason: `${costRatio.toFixed(2)}× normal cost per token for ${usage.model}; ${burnRatio.toFixed(2)}× normal usage per call across models.` }];
   }));
 }
 

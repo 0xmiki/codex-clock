@@ -5,7 +5,7 @@
 </script>
 
 <div class="efficiency-detail">
-  <h3>Usage grade</h3>
+  <h3>Efficiency grade</h3>
   {#if efficiency.available}
     <div class="headline"><span class="grade grade-{efficiency.grade.toLowerCase()}">{efficiency.grade}</span><span>{efficiency.reason}</span></div>
     <p>{efficiency.model} · last {efficiency.samples} calls{efficiency.lastSampleAt ? ` · latest ${fullTime(efficiency.lastSampleAt / 1000)}` : ''}</p>
@@ -15,11 +15,15 @@
       <div><dt>Average output</dt><dd>{exact(Math.round(efficiency.averageOutput))} tokens</dd></div>
       <div><dt>Recent API-equivalent cost / call</dt><dd>{costRange(efficiency.recentCost)}</dd></div>
       <div><dt>Your normal cost / call</dt><dd>{money(efficiency.normalCost)}</dd></div>
-      <div><dt>Usage versus normal</dt><dd>{efficiency.costRatio.toFixed(2)}×</dd></div>
+      <div><dt>Usage / call versus normal across models</dt><dd>{efficiency.burnRatio.toFixed(2)}×</dd></div>
+      <div><dt>Cost / million input + output tokens</dt><dd>{money(efficiency.costPerMillion)}</dd></div>
+      <div><dt>Same-model normal / million tokens</dt><dd>{money(efficiency.normalCostPerMillion)}</dd></div>
+      <div><dt>Cost / token versus same-model normal</dt><dd>{efficiency.costRatio.toFixed(2)}×</dd></div>
     </dl>
-    <p>Normal is the median recent cost per call of {efficiency.baselineThreads} other threads across all projects and models. Each contributes its last 5 calls, so one long thread cannot dominate. This thread is excluded.</p>
+    <p>The grade compares total cost divided by total input + output tokens over the last 5 calls with the median of {efficiency.baselineThreads} other recent threads on the same model. Each peer contributes one rate. This thread is excluded, and project filters do not change the baseline.</p>
     <p>A ≤1× normal · B ≤1.5× · C ≤2× · D ≤3× · F >3×.</p>
-    <p>The multiplier uses the midpoint of estimated API costs, including cache discounts. It estimates consumption per model call, not per minute or exact subscription usage. An F means unusually heavy consumption; the work may still justify it.</p>
+    <p>The separate usage multiplier compares cost per call with up to 30 other recent threads across models. An A can still consume heavily because of an expensive model or large context.</p>
+    <p>Both use midpoint API-equivalent estimates, including cache discounts—not exact subscription usage. F means unusually high cost per token for this model, not proven waste. Output-heavy work can legitimately cost more.</p>
   {:else}<p>{efficiency.reason}</p>{/if}
 </div>
 
