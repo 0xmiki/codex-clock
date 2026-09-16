@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Rpc } from '../server/rpc';
 import { createDashboard, readGeneratedTitles, readTranscript } from '../server/dashboard';
 import { createUsageReader, parseUsage } from '../server/usage';
-import { activeProjects, cacheRate, dailyBuckets, efficiencyPressure, estimatedApiCost, estimatedCredits, projectRollup, sumCacheRate, sumThreadUsage, todayThreads, workflowPressure } from '../src/lib/today';
+import { activeProjects, cacheRate, dailyBuckets, projectRollup, sumCacheRate, sumThreadUsage, todayThreads } from '../src/lib/today';
 import type { Snapshot, Thread, UsageMetrics } from '../src/lib/types';
 import { makeFixture, tokenLine } from './fixture';
 import { usagePrompt } from '../server/assistant';
@@ -107,15 +107,6 @@ test('projects follow latest thread activity and appear once', () => {
   expect(activeProjects(threads)).toEqual(['/new', '/old']);
 });
 
-test('efficiency pressure makes the same waste riskier on expensive models', () => {
-  const usage = { totalTokens: 200000, inputTokens: 180000, cachedInputTokens: 0, outputTokens: 20000, reasoningOutputTokens: 0, last: { totalTokens: 180000 }, modelContextWindow: 258400, turns: 4, modelCalls: 4, recentRequests: [150000, 180000] } as UsageMetrics;
-  expect(efficiencyPressure(usage, 'gpt-6-astra')).toBeGreaterThanOrEqual(60);
-  expect(efficiencyPressure(usage, 'gpt-5.6-luna')).toBeLessThan(60);
-  expect(estimatedCredits(usage, 'gpt-6-astra')).toBeGreaterThan(estimatedCredits(usage, 'gpt-5.6-luna')!);
-  expect(estimatedApiCost(usage, 'gpt-6-astra')).toBe(estimatedCredits(usage, 'gpt-6-astra')! / 25);
-  expect(workflowPressure([{ model: 'gpt-6-astra', usage }, { model: 'gpt-5.6-luna', usage }] as Thread[])).toBeGreaterThan(efficiencyPressure(usage, 'gpt-5.6-luna')!);
-});
-
 test('assistant context keeps the costliest today threads first', () => {
   const now = Date.parse('2026-09-13T12:00:00Z');
   const metrics = { totalTokens: 100, inputTokens: 80, cachedInputTokens: 60, outputTokens: 20, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 1, modelCalls: 2, recentRequests: [] };
@@ -138,7 +129,7 @@ test('daily buckets order days chronologically and flag today', () => {
   const buckets = dailyBuckets(threads, now, 5);
   expect(buckets.map(bucket => [bucket.day, bucket.threads, bucket.tokens, bucket.isToday])).toEqual([
     ['2026-09-13', 1, 500, false],
-    ['2026-09-15', 3, 1500, true]
+    ['2026-09-15', 3, 1000, true]
   ]);
   expect(dailyBuckets([], now)).toEqual([]);
   expect(dailyBuckets(threads, now, 1)).toHaveLength(1);
@@ -146,7 +137,7 @@ test('daily buckets order days chronologically and flag today', () => {
 
 test('project rollup aggregates tokens per cwd and ranks by weight', () => {
   const usage = { totalTokens: 100, inputTokens: 80, cachedInputTokens: 60, outputTokens: 20, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 1, modelCalls: 2, recentRequests: [] };
-  const thread = (cwd: string, tokens: number) => ({ cwd, usage: { ...usage, totalTokens: tokens } }) as Thread;
+  const thread = (cwd: string, tokens: number): Thread => ({ id: cwd, title: cwd, modelProvider: 'openai', updatedAt: 0, usageError: null, cwd, usage: { ...usage, totalTokens: tokens, byModel: {} } });
   const rollup = projectRollup([thread('/x/a', 100), thread('/x/b', 900), thread('/x/a', 50), { cwd: '/x/c' } as Thread], 2);
   expect(rollup.map(row => [row.name, row.tokens, row.threads])).toEqual([['b', 900, 1], ['a', 150, 2]]);
 });

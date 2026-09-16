@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
-import type { TokenBreakdown, Usage, UsageMetrics } from '../src/lib/types';
+import type { TokenBreakdown, Usage, UsageCall, UsageMetrics } from '../src/lib/types';
 
 const counter = (value: unknown): number | null => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 export function parseUsage(value: any): TokenBreakdown | null {
@@ -25,6 +25,8 @@ export function createUsageReader() {
       const blank = (): UsageMetrics => ({ totalTokens: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 0, modelCalls: 0, recentRequests: [] });
       const total = blank();
       const byModel: Record<string, UsageMetrics> = {};
+      const recentCalls: UsageCall[] = [];
+      const longContextModels = new Set<string>();
       let previous: TokenBreakdown | null = null;
       let currentModel = fallbackModel;
       let sawUsage = false;
@@ -41,7 +43,15 @@ export function createUsageReader() {
           let record;
           try { record = JSON.parse(line); } catch { continue; } // A writer may leave a partial final line.
           const nextModel = record?.type === 'turn_context' ? record.payload?.model : record?.type === 'world_state' ? record.payload?.state?.model : null;
-          if (typeof nextModel === 'string' && nextModel) { currentModel = nextModel; continue; }
+          if (typeof nextModel === 'string' && nextModel) {
+            if (nextModel !== currentModel) recentCalls.length = 0;
+            currentModel = nextModel;
+            continue;
+          }
+          if (record?.type === 'compacted' || (record?.type === 'event_msg' && record.payload?.type === 'context_compacted')) {
+            recentCalls.length = 0;
+            continue;
+          }
           if (record?.type === 'event_msg' && record.payload?.type === 'task_started') {
             total.turns++;
             (byModel[currentModel] ||= blank()).turns++;
@@ -51,8 +61,10 @@ export function createUsageReader() {
           const nextTotal = parseUsage(record.payload.info?.total_token_usage);
           const nextLast = parseUsage(record.payload.info?.last_token_usage);
           const nextWindow = counter(record.payload.info?.model_context_window);
+          if (nextLast && nextLast.inputTokens > 272_000) longContextModels.add(currentModel);
           if (nextTotal && nextTotal.totalTokens !== previous?.totalTokens) {
             const reset = !previous || nextTotal.totalTokens < previous.totalTokens || nextTotal.inputTokens < previous.inputTokens || nextTotal.outputTokens < previous.outputTokens;
+            if (reset) recentCalls.length = 0;
             const delta: TokenBreakdown = reset ? nextTotal : {
               totalTokens: nextTotal.totalTokens - previous!.totalTokens,
               inputTokens: nextTotal.inputTokens - previous!.inputTokens,
@@ -64,10 +76,13 @@ export function createUsageReader() {
             add(total, delta); add(modelUsage, delta);
             total.modelCalls++; modelUsage.modelCalls++;
             if (nextLast) {
+              const timestamp = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : NaN;
+              recentCalls.push({ ...nextLast, model: currentModel, timestamp: Number.isFinite(timestamp) ? timestamp : null });
+              if (recentCalls.length > 12) recentCalls.shift();
               total.recentRequests.push(nextLast.totalTokens); modelUsage.recentRequests.push(nextLast.totalTokens);
               if (total.recentRequests.length > 12) total.recentRequests.shift();
               if (modelUsage.recentRequests.length > 12) modelUsage.recentRequests.shift();
-            }
+            } else recentCalls.length = 0;
             sawUsage = true;
           }
           if (nextTotal) previous = nextTotal;
@@ -75,7 +90,7 @@ export function createUsageReader() {
           if (nextWindow !== null) { total.modelContextWindow = nextWindow; (byModel[currentModel] ||= blank()).modelContextWindow = nextWindow; }
         }
       } finally { lines.close(); input.destroy(); }
-      const usage: Usage | null = sawUsage ? { ...total, byModel } : null;
+      const usage: Usage | null = sawUsage ? { ...total, byModel, recentCalls, activeModel: currentModel, longContextModels: [...longContextModels] } : null;
       if (cache.size >= 100) cache.delete(cache.keys().next().value!);
       cache.set(path, { size: info.size, mtime: info.mtimeMs, usage });
       return { usage, usageError: null };

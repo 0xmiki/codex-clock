@@ -12,37 +12,45 @@
   import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
   import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
   import type { Thread } from '$lib/types';
-  import { cacheRate, threadApiCost, threadPressure } from '$lib/today';
-  import { fmt, exact, money, percent, pressureLabel, pressureTone, project, relativeTime, fullTime } from '$lib/format';
+  import { cacheRate, threadApiCost } from '$lib/today';
+  import type { ThreadEfficiency } from '$lib/efficiency';
+  import { fmt, exact, money, percent, project, relativeTime, fullTime } from '$lib/format';
   import { askCoach } from '$lib/coach.svelte';
   import MixBar from './MixBar.svelte';
   import Sparkline from './Sparkline.svelte';
+  import EfficiencyDetails from './EfficiencyDetails.svelte';
 
-  let { threads, now }: { threads: Thread[]; now: number } = $props();
+  let { threads, now, efficiencyGrades }: { threads: Thread[]; now: number; efficiencyGrades: ReadonlyMap<string, ThreadEfficiency> } = $props();
 
-  type SortKey = 'when' | 'tokens' | 'cache' | 'cost' | 'pressure' | 'project';
+  type SortKey = 'when' | 'tokens' | 'cache' | 'cost' | 'efficiency' | 'project';
   let sortKey = $state<SortKey>('when');
   let sortDesc = $state(true);
   let expandedId = $state<string | null>(null);
   let copiedId = $state('');
 
   const row = (thread: Thread) => ({
+    thread,
     tokens: thread.usage?.totalTokens ?? null,
     cache: cacheRate(thread.usage),
     cost: threadApiCost(thread),
-    pressure: threadPressure(thread),
+    efficiency: efficiencyGrades.get(thread.id) ?? { available: false as const, reason: 'No usage grade available.' },
     models: Object.entries(thread.usage?.byModel || {}).filter(([, usage]) => usage.modelCalls > 0)
   });
 
+  const rows = $derived(threads.map(row));
   const sorted = $derived.by(() => {
     const dir = sortDesc ? -1 : 1;
-    return threads.toSorted((a, b) => {
-      const x = row(a), y = row(b);
+    return rows.toSorted((x, y) => {
+      const a = x.thread, b = y.thread;
       switch (sortKey) {
         case 'tokens': return ((x.tokens ?? -1) - (y.tokens ?? -1)) * dir;
         case 'cache': return ((x.cache ?? -1) - (y.cache ?? -1)) * dir;
         case 'cost': return ((x.cost ?? -1) - (y.cost ?? -1)) * dir;
-        case 'pressure': return ((x.pressure ?? -1) - (y.pressure ?? -1)) * dir;
+        case 'efficiency': {
+          if (!x.efficiency.available) return y.efficiency.available ? 1 : 0;
+          if (!y.efficiency.available) return -1;
+          return (x.efficiency.costRatio - y.efficiency.costRatio) * dir;
+        }
         case 'project': return project(a.cwd).localeCompare(project(b.cwd)) * dir;
         default: return (a.updatedAt - b.updatedAt) * dir;
       }
@@ -85,8 +93,8 @@
           <Table.Head scope="col" class="numeric" aria-sort={ariaSort('cost')}>
             <Button variant="ghost" size="sm" class="sort h-auto px-0 py-1 text-[11px]" onclick={() => sortBy('cost')} title="API-equivalent estimate from OpenAI token prices; not your Codex subscription charge">≈ API<span class="arrow" class:on={isOn('cost')} aria-hidden="true">{#if isOn('cost') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></Button>
           </Table.Head>
-          <Table.Head scope="col" class="numeric" aria-sort={ariaSort('pressure')}>
-            <Button variant="ghost" size="sm" class="sort h-auto px-0 py-1 text-[11px]" onclick={() => sortBy('pressure')} title="0–100 efficiency score combining model price, cache reuse, context use, and request size. 60+ is high.">Pressure<span class="arrow" class:on={isOn('pressure')} aria-hidden="true">{#if isOn('pressure') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></Button>
+          <Table.Head scope="col" class="efficiency-col" aria-sort={ariaSort('efficiency')}>
+            <Button variant="ghost" size="sm" class="sort h-auto px-0 py-1 text-[11px]" onclick={() => sortBy('efficiency')} title="Last 5 calls compared with your normal estimated cost per call. A ≤1×, B ≤1.5×, C ≤2×, D ≤3×, F >3×.">Usage grade<span class="arrow" class:on={isOn('efficiency')} aria-hidden="true">{#if isOn('efficiency') && !sortDesc}<CaretUpIcon size={10} weight="fill" />{:else}<CaretDownIcon size={10} weight="fill" />{/if}</span></Button>
           </Table.Head>
           <Table.Head scope="col" class="numeric" title="Latest request as a share of the model context window">Context</Table.Head>
           <Table.Head scope="col" class="numeric" aria-sort={ariaSort('when')}>
@@ -96,10 +104,9 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each sorted as thread (thread.id)}
-          {@const values = row(thread)}
+        {#each sorted as values (values.thread.id)}
+          {@const thread = values.thread}
           {@const contextPercent = thread.usage?.last && thread.usage.modelContextWindow ? Math.min(100, Math.round(thread.usage.last.totalTokens / thread.usage.modelContextWindow * 100)) : null}
-          {@const tone = values.pressure !== null ? pressureTone(values.pressure) : null}
           {@const requests = thread.usage?.recentRequests ?? []}
           <Table.Row class={["main-row", expandedId === thread.id && "bg-muted"]} onclick={() => toggle(thread.id)}>
             <Table.Cell class="session-col">
@@ -123,19 +130,19 @@
             </Table.Cell>
             <Table.Cell class="numeric"><span class="num" class:dim={values.cache === null}>{percent(values.cache)}</span></Table.Cell>
             <Table.Cell class="numeric"><span class="num" class:dim={values.cost === null}>{money(values.cost)}</span></Table.Cell>
-            <Table.Cell class="numeric">
-              {#if values.pressure !== null}
-                <span class="pressure">
-                  <span class="num tone-{tone}">{values.pressure}</span>
-                  <Progress value={values.pressure} class="h-1 w-14" aria-label="Workflow pressure" />
+            <Table.Cell class="efficiency-col">
+              {#if values.efficiency.available}
+                <span class="usage-grade" title={`${values.efficiency.reason} Expand for the calculation.`}>
+                  <span class="grade grade-{values.efficiency.grade.toLowerCase()}">{values.efficiency.grade}</span>
+                  <span class="burn-multiplier">{values.efficiency.costRatio.toFixed(2)}× normal</span>
                 </span>
               {:else}
-                <span class="num dim">—</span>
+                <span class="num dim" title={values.efficiency.reason}>—</span>
               {/if}
             </Table.Cell>
             <Table.Cell class="numeric">
               {#if contextPercent !== null}
-                <span class="pressure">
+                <span class="metric-stack">
                   <span class="num" class:hot={contextPercent >= 80}>{contextPercent}%</span>
                   <Progress value={contextPercent} class="h-1 w-14" style={`--primary: var(--${contextPercent >= 80 ? 'chart-3' : 'chart-4'})`} aria-label="Context used" />
                 </span>
@@ -169,6 +176,7 @@
                         <p class="meta">Latest context <b>{contextPercent}%</b> · {fmt(thread.usage.last?.totalTokens)} of {fmt(thread.usage.modelContextWindow)} window</p>
                         <Progress value={contextPercent} class="mt-2 h-1.5 max-w-[300px]" style="--primary: var(--chart-4)" aria-label="Context used" />
                       {/if}
+                      <EfficiencyDetails efficiency={values.efficiency} />
                     </div>
                     <div class="pane">
                       <h3>Token mix</h3>
@@ -199,8 +207,8 @@
                           </Tooltip.Trigger>
                           <Tooltip.Content>Copy a reference the coach understands</Tooltip.Content>
                         </Tooltip.Root>
-                        {#if (values.pressure ?? 0) >= 60}
-                          <Button variant="destructive" size="sm" onclick={() => void askCoach(`Why is “${thread.title}” above 60 pressure? Inspect its transcript and give me specific changes.`, thread.id)}>Ask the coach why</Button>
+                        {#if values.efficiency.available && ['D', 'F'].includes(values.efficiency.grade)}
+                          <Button variant="outline" size="sm" onclick={() => void askCoach('Why is this thread consuming more usage per call than my normal? Explain its usage grade using model pricing, recent input, caching and output. Suggest ways to reduce consumption.', thread.id)}>Review usage</Button>
                         {/if}
                       </div>
                     </div>
@@ -243,16 +251,21 @@
 
   td.numeric .mix { margin-top: 6px; width: 88px; margin-left: auto; background: var(--secondary); }
 
-  .pressure { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-  .tone-good { color: var(--chart-2); }
-  .tone-warn { color: var(--chart-3); }
-  .tone-bad { color: var(--destructive); }
+  .metric-stack { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  th.efficiency-col, td.efficiency-col { text-align: center; }
+  th.efficiency-col .sort { width: 100%; justify-content: center; }
+  .usage-grade { display: inline-flex; flex-direction: column; align-items: center; }
+  .burn-multiplier { color: var(--muted-foreground); font: 400 10px var(--font-mono); }
+  .grade { display: inline-grid; min-width: 28px; min-height: 28px; place-items: center; font: 700 16px var(--font-sans); line-height: 1; }
+  .grade-a, .grade-b { color: var(--success); }
+  .grade-c { color: var(--chart-3); }
+  .grade-d, .grade-f { color: var(--destructive); }
   .num.hot { color: var(--chart-3); }
 
   .spark-col { width: 110px; }
   .spark { display: flex; justify-content: flex-end; }
 
-  .detail-row td { background: var(--background); padding: 0; }
+  .detail-row td { background: var(--background); padding: 0; white-space: normal; }
   .detail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; padding: 20px 24px 24px; border-bottom: 1px solid var(--border); }
   .pane { min-width: 0; }
   .pane h3 { margin: 0 0 12px; color: var(--muted-foreground); font: 600 10.5px var(--font-sans); letter-spacing: 0.7px; text-transform: uppercase; }

@@ -12,7 +12,13 @@ export type UsageMetrics = TokenBreakdown & {
   modelCalls: number;
   recentRequests: number[];
 };
-export type Usage = UsageMetrics & { byModel: Record<string, UsageMetrics> };
+export type UsageCall = TokenBreakdown & { model: string; timestamp: number | null };
+export type Usage = UsageMetrics & {
+  byModel: Record<string, UsageMetrics>;
+  recentCalls?: UsageCall[];
+  activeModel?: string;
+  longContextModels?: string[];
+};
 export type Thread = {
   id: string; title: string; cwd: string;
   model?: string | null; modelProvider: string; updatedAt: number;

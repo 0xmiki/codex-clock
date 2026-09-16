@@ -32,5 +32,7 @@ export const dayLabel = (key: string, todayKey?: string) => {
   return label;
 };
 
-export const pressureTone = (p: number) => (p >= 60 ? 'bad' : p >= 40 ? 'warn' : 'good');
-export const pressureLabel = (p: number) => (p >= 60 ? 'High' : p >= 40 ? 'Moderate' : 'Low');
+export const costRange = (range: { low: number; high: number }) => {
+  const dollar = (n: number) => `${n < 0 ? '−' : ''}$${Math.abs(n).toFixed(Math.abs(n) < 1 ? 3 : 2)}`;
+  return Math.abs(range.high - range.low) < .0005 ? `≈ ${dollar(range.low)}` : `≈ ${dollar(range.low)} to ${dollar(range.high)}`;
+};

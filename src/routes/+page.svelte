@@ -19,6 +19,7 @@
   import { activeProjects, dailyBuckets, sumThreadUsage, threadApiCost, todayThreads } from '$lib/today';
   import type { Snapshot } from '$lib/types';
   import { project } from '$lib/format';
+  import { gradeThreads } from '$lib/efficiency';
 
   let data = $state<Snapshot | null>(null);
   let error = $state('');
@@ -27,6 +28,7 @@
   let filterHeight = $state(0);
   let projectOrder = $state<string[]>([]);
   let now = $state(Date.now());
+  const efficiencyGrades = $derived(gradeThreads(data?.threads ?? []));
 
   let today = $derived(todayThreads(data?.threads || [], now));
   let selectedToday = $derived(today.filter(thread => !selectedProject || thread.cwd === selectedProject));
@@ -121,7 +123,7 @@
             <div class="flex min-w-0 flex-col gap-4 p-1 pr-4">
               <TodayPanel total={daily.total} cached={daily.cached} fresh={daily.input} output={daily.output} calls={daily.calls} {turns} sessions={selectedToday.length} cost={dailyCost} projectName={selectedProject ? project(selectedProject) : 'All projects'} />
               <TrendChart {buckets} />
-              <Standouts {today} onSelectProject={selectProject} />
+              <Standouts {today} {efficiencyGrades} onSelectProject={selectProject} />
             </div>
           </ScrollArea>
         </aside>
@@ -134,7 +136,7 @@
               {/each}
             </nav>
           {/if}
-          <div id="threads" class="min-w-0" style:scroll-margin-top={`${76 + filterHeight}px`}><ThreadTable threads={visibleThreads} {now} /></div>
+          <div id="threads" class="min-w-0" style:scroll-margin-top={`${76 + filterHeight}px`}><ThreadTable threads={visibleThreads} {efficiencyGrades} {now} /></div>
           <Separator />
           <footer class="flex flex-wrap justify-between gap-3 text-xs text-muted-foreground">
             <span>Read from local Codex data{data.updatedAt ? ` at ${new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}{data.hasMore ? ` · newest ${data.threads.length} saved threads` : ''}</span>

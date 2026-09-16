@@ -35,7 +35,7 @@ const server = Bun.serve({
       try {
         const transcript = threadId ? await dashboard.inspectThread(threadId) : null;
         if (threadId && transcript === null) return Response.json({ error: 'That saved thread is no longer available.' }, { status: 404, headers });
-        return Response.json({ answer: await assistant.ask(question, dashboard.state, transcript) }, { headers });
+        return Response.json({ answer: await assistant.ask(question, dashboard.state, transcript, threadId) }, { headers });
       } catch (error) { return Response.json({ error: error instanceof Error ? error.message : 'The assistant failed.' }, { status: 500, headers }); }
     }
     if (request.method !== 'GET') return new Response('Method not allowed', { status: 405, headers });

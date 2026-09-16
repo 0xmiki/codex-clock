@@ -2,19 +2,19 @@
   import * as Card from '$lib/components/ui/card/index.js';
   import { Button } from '$lib/components/ui/button/index.js';
   import type { Thread } from '$lib/types';
-  import { projectRollup, sumCacheRate, threadApiCost, threadPressure, workflowPressure } from '$lib/today';
-  import { fmt, money, pressureLabel, pressureTone, project } from '$lib/format';
+  import { projectRollup, sumCacheRate, threadApiCost } from '$lib/today';
+  import { workflowGrades, type ThreadEfficiency } from '$lib/efficiency';
+  import { fmt, money, project } from '$lib/format';
   import { askCoach } from '$lib/coach.svelte';
   import Ring from './Ring.svelte';
 
-  let { today, onSelectProject }: { today: Thread[]; onSelectProject: (cwd: string) => void } = $props();
+  let { today, onSelectProject, efficiencyGrades }: { today: Thread[]; onSelectProject: (cwd: string) => void; efficiencyGrades: ReadonlyMap<string, ThreadEfficiency> } = $props();
 
   const topProjects = $derived(projectRollup(today, 5));
   const heaviest = $derived(today.filter(t => t.usage).toSorted((a, b) => (b.usage?.totalTokens ?? 0) - (a.usage?.totalTokens ?? 0)).slice(0, 3));
   const cacheRate = $derived(sumCacheRate(today));
-  const pressure = $derived(workflowPressure(today));
+  const grades = $derived(workflowGrades(today, efficiencyGrades));
   const maxProjectTokens = $derived(Math.max(1, ...topProjects.map(row => row.tokens)));
-  const highPressureCount = $derived(today.filter(t => (threadPressure(t) ?? 0) >= 60).length);
 </script>
 
 <div class="standouts">
@@ -43,7 +43,7 @@
     {#if heaviest.length}
       <ul>
         {#each heaviest as thread (thread.id)}
-          {@const tone = threadPressure(thread)}
+          {@const efficiency = efficiencyGrades.get(thread.id)}
           <li>
             <div class="row">
               <span class="title" title={thread.title}>{thread.title}</span>
@@ -52,12 +52,10 @@
             <div class="row dim">
               <span>{project(thread.cwd)}</span>
               <span class="actions">
-                {#if threadPressure(thread) !== null}
-                  <b class="tone-{pressureTone(threadPressure(thread)!)}">{threadPressure(thread)}/100 {pressureLabel(threadPressure(thread)!)}</b>
-                {/if}
                 {#if threadApiCost(thread) !== null}<span>{money(threadApiCost(thread))}</span>{/if}
-                {#if (tone ?? 0) >= 60}
-                  <Button size="xs" variant="destructive" onclick={() => void askCoach(`Why is “${thread.title}” above 60 pressure? Inspect its transcript and give me specific changes.`, thread.id)}>Ask why</Button>
+                {#if efficiency?.available}<b class="grade grade-{efficiency.grade.toLowerCase()}" title={efficiency.reason}>{efficiency.grade}</b>{/if}
+                {#if efficiency?.available && ['D', 'F'].includes(efficiency.grade)}
+                  <Button size="xs" variant="outline" onclick={() => void askCoach('Explain why this thread is consuming more usage per call than my normal and suggest ways to reduce consumption.', thread.id)}>Review grade</Button>
                 {/if}
               </span>
             </div>
@@ -69,9 +67,9 @@
     {/if}
   </Card.Root>
 
-  <Card.Root class="min-w-0 rounded-xl gap-3 p-5" aria-label="Efficiency signals today">
-    <h2>Efficiency</h2>
-    {#if cacheRate !== null || pressure !== null}
+  <Card.Root class="min-w-0 rounded-xl gap-3 p-5" aria-label="Usage grades today">
+    <h2>Usage versus normal</h2>
+    {#if cacheRate !== null || grades.available > 0}
       <div class="gauges">
         <div class="gauge">
           <div class="ring-wrap"><Ring label="Cache reuse" value={cacheRate ?? 0} color="var(--chart-1)" /><b>{cacheRate ?? '—'}%</b></div>
@@ -79,16 +77,18 @@
           <span class="caption" title="Share of today's input tokens served from cache. Higher is cheaper.">of input served from cache</span>
         </div>
         <div class="gauge">
-          <div class="ring-wrap">
-            <Ring label="Pressure" value={pressure ?? 0} color={pressure === null ? 'var(--muted)' : 'var(--chart-1)'} />
-            <b class={pressure !== null ? `tone-${pressureTone(pressure)}` : ''}>{pressure ?? '—'}</b>
+          <div class="grade-strip" aria-label="Usage grade distribution">
+            {#each Object.entries(grades.counts) as [grade, count]}
+              <span class="grade grade-{grade.toLowerCase()}" title={`${count} grade ${grade}`}>{grade}<small>{count}</small></span>
+            {/each}
           </div>
-          <span class="label">Pressure</span>
-          <span class="caption">{pressure === null ? 'no scored usage today' : `${pressureLabel(pressure)} · 60+ means waste risk`}{highPressureCount ? ` · ${highPressureCount} high` : ''}</span>
+          <span class="label">Thread grades</span>
+          <span class="caption">A: at or below normal · F: over 3× normal</span>
         </div>
       </div>
+      <p class="hint">{grades.available} of {grades.total} threads updated today are graded. Last 5 calls versus the median of up to 30 other recent threads, across all projects.</p>
     {:else}
-      <p class="empty">Nothing scored yet today.</p>
+      <p class="empty">Learning your normal usage. Grades need 5 recent priced calls and at least 5 other eligible threads.</p>
     {/if}
   </Card.Root>
 </div>
@@ -116,10 +116,6 @@
   .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--foreground); font-size: 13px; }
   .tokens { color: var(--foreground); font: 600 13px var(--font-mono); }
   .actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; white-space: nowrap; }
-  .actions b { font: 600 11px var(--font-mono); }
-  .tone-good { color: var(--chart-2); }
-  .tone-warn { color: var(--chart-3); }
-  .tone-bad { color: var(--destructive); }
 
 
   /* efficiency */
@@ -129,6 +125,12 @@
   .ring-wrap b { position: absolute; font: 600 19px var(--font-sans); letter-spacing: -0.5px; color: var(--foreground); }
   .label { margin-top: 8px; color: var(--foreground); font: 600 12px var(--font-sans); }
   .caption { max-width: 140px; }
+  .grade-strip { display: flex; align-items: flex-end; gap: 4px; min-height: 88px; }
+  .grade { display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-width: 24px; height: 28px; font: 700 13px var(--font-sans); line-height: 1; }
+  .grade small { font-size: 8px; font-weight: 500; }
+  .grade-a, .grade-b { color: var(--success); }
+  .grade-c { color: var(--chart-3); }
+  .grade-d, .grade-f { color: var(--destructive); }
 
 
 </style>
