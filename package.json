@@ -1,6 +1,6 @@
 {
   "name": "codex-clock",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A local Codex usage coach and allowance dashboard",
   "repository": {
     "type": "git",
