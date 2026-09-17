@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline';
 import { Rpc } from './rpc';
 import { createUsageReader } from './usage';
 import { readProductivity } from './productivity';
+import { parseAccountLimits } from './limits';
 
 export async function readGeneratedTitles(path = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'session_index.jsonl')) {
   const titles = new Map<string, string>();
@@ -47,8 +48,12 @@ export function createDashboard(rpc: Rpc, executable?: string, sessionIndexPath?
   async function refresh() {
     if (refreshing) return refreshing;
     refreshing = (async () => {
+      state.limits = null;
       try {
         await rpc.connect({ executable });
+        // Account lookup failure must not prevent saved thread statistics loading.
+        try { state.limits = parseAccountLimits(await rpc.request('account/rateLimits/read')); }
+        catch { state.limits = null; }
         // ponytail: newest 100 saved threads; paginate when users need deeper history.
         const listed = await rpc.request<{ data: Array<{ id: string; name?: string | null; preview?: string | null; cwd: string; model?: string | null; modelProvider: string; updatedAt: number; parentThreadId?: string | null; path?: string | null }>; nextCursor: string | null }>('thread/list', { limit: 100, sortKey: 'updated_at', sourceKinds: ['cli', 'vscode', 'exec', 'appServer', 'subAgent', 'unknown'] });
         const generatedTitles = await readGeneratedTitles(sessionIndexPath);

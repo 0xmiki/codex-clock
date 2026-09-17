@@ -27,6 +27,7 @@ export function createUsageReader() {
       const byModel: Record<string, UsageMetrics> = {};
       const recentCalls: UsageCall[] = [];
       const dailyTokens: Record<string, number> = {};
+      const minuteTokens: Record<string, number> = {};
       const longContextModels = new Set<string>();
       let previous: TokenBreakdown | null = null;
       let currentModel = fallbackModel;
@@ -84,6 +85,8 @@ export function createUsageReader() {
             if (Number.isFinite(recordedAt)) {
               const day = new Date(recordedAt).toISOString().slice(0, 10);
               dailyTokens[day] = (dailyTokens[day] ?? 0) + delta.totalTokens;
+              const minute = new Date(recordedAt).toISOString().slice(0, 16);
+              minuteTokens[minute] = (minuteTokens[minute] ?? 0) + delta.totalTokens;
             }
             add(total, delta); add(modelUsage, delta);
             total.modelCalls++; modelUsage.modelCalls++;
@@ -102,7 +105,7 @@ export function createUsageReader() {
           if (nextWindow !== null) { total.modelContextWindow = nextWindow; (byModel[currentModel] ||= blank()).modelContextWindow = nextWindow; }
         }
       } finally { lines.close(); input.destroy(); }
-      const usage: Usage | null = sawUsage ? { ...total, byModel, dailyTokens, recentCalls, activeModel: currentModel, longContextModels: [...longContextModels] } : null;
+      const usage: Usage | null = sawUsage ? { ...total, byModel, dailyTokens, minuteTokens, recentCalls, activeModel: currentModel, longContextModels: [...longContextModels] } : null;
       if (cache.size >= 100) cache.delete(cache.keys().next().value!);
       cache.set(path, { size: info.size, mtime: info.mtimeMs, usage });
       return { usage, usageError: null };

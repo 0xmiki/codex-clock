@@ -1,52 +1,39 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card/index.js';
-  import MixBar from './MixBar.svelte';
-  import { fmt, exact, money } from '$lib/format';
-
-  let {
-    total, cached, fresh, output, calls, turns, sessions, cost, projectName = 'All projects'
-  }: { total: number; cached: number; fresh: number; output: number; calls: number; turns: number; sessions: number; cost: number | null; projectName?: string } = $props();
-  const headline = $derived(total > 0 ? fmt(total) : '0');
+  import { fmt, exact } from '$lib/format';
+  import type { usageComparison } from '$lib/comparison';
+  let { total, comparison, partial = false, projectName = 'All projects' }: { total: number; comparison: ReturnType<typeof usageComparison>; partial?: boolean; projectName?: string } = $props();
 </script>
 
-<Card.Root class="today min-w-0 rounded-xl gap-5 p-5" aria-label={`Today’s saved usage · ${projectName}`}>
-  <div class="lead">
-    <div class="kicker"><span class="dot" aria-hidden="true"></span>Today · {new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</div>
-    <p class="project" title={projectName}>{projectName}</p>
-    <p class="headline">
-      <span class="number" title={exact(total)}>{headline}</span>
-      <span class="unit">tokens so far</span>
-    </p>
-    <p class="sub">{sessions} {sessions === 1 ? 'session' : 'sessions'} · {calls} model {calls === 1 ? 'call' : 'calls'} · {turns} {turns === 1 ? 'turn' : 'turns'} {#if cost !== null}<span class="cost" title="API-equivalent estimate from OpenAI token prices; this is not your Codex subscription charge">· {money(cost)} API-equivalent</span>{/if}</p>
+<Card.Root class="min-w-0 rounded-xl gap-2 p-4" aria-label={`Today’s saved usage · ${projectName}`}>
+  <div class="heading">
+    <span title="Tokens recorded today (UTC), including resent context">Today</span>
+    {#if projectName !== 'All projects'}<span class="project" title={projectName}>{projectName}</span>{/if}
   </div>
-  <div class="mix-block">
-    <MixBar {cached} {fresh} {output} height={12} />
-    <div class="legend">
-      <span title={exact(cached)}><i class="cached"></i>Cached <b>{fmt(cached)}</b></span>
-      <span title={exact(fresh)}><i class="fresh"></i>Fresh input <b>{fmt(fresh)}</b></span>
-      <span title={exact(output)}><i class="output"></i>Output <b>{fmt(output)}</b></span>
+  <p class="headline"><span class="number" title={exact(total)}>{fmt(total)}</span><span class="unit">tokens</span></p>
+  <details>
+    <summary>{comparison.percent === null ? comparison.average === 0 ? 'No usual usage yet' : 'Building your baseline' : Math.round(Math.abs(comparison.percent)) === 0 ? 'On par with usual' : `${comparison.percent > 0 ? '↑' : '↓'} ${Math.round(Math.abs(comparison.percent))}% vs usual`}</summary>
+    <div class="comparisons">
+      <div><span>Usual by now</span><b>{comparison.average === null ? '—' : fmt(comparison.average)}</b></div>
+      <div><span>Yesterday by now</span><b>{comparison.yesterday === null ? '—' : fmt(comparison.yesterday)}</b></div>
+      <div><span>Last 7 full days</span><b>{comparison.lastWeek === null ? '—' : fmt(comparison.lastWeek)}</b></div>
+      <div><span>Previous 7 days</span><b>{comparison.previousWeek === null ? '—' : fmt(comparison.previousWeek)}</b></div>
+      <p>Tokens · UTC, to the current minute. Usual averages the previous 7 days, including days with no recorded usage. {partial ? 'Newest saved threads only; history is partial.' : 'Based on loaded thread history.'}</p>
     </div>
-  </div>
+  </details>
 </Card.Root>
 
 <style>
-
-  .kicker { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font: 600 11px/1.5 var(--font-mono); letter-spacing: 1.2px; text-transform: uppercase; }
-  .dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 8px var(--primary); }
-  .project { margin: 12px 0 0; color: var(--primary); font: 600 13px var(--font-sans); overflow-wrap: anywhere; }
-  .headline { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; margin: 10px 0 0; }
-  .number { font: 700 44px/1 var(--font-sans); letter-spacing: -2px; color: var(--foreground); font-variant-numeric: tabular-nums; }
-  .unit { color: var(--muted-foreground); font: 500 14px var(--font-sans); }
-  .sub { margin: 8px 0 0; color: var(--muted-foreground); font: 400 13px/1.6 var(--font-sans); }
-  .cost { color: var(--muted-foreground); }
-  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; color: var(--muted-foreground); font-size: 12px; }
-  .legend span { display: inline-flex; align-items: center; gap: 6px; }
-  .legend b { color: var(--foreground); font: 600 12px var(--font-mono); }
-  .legend i { width: 8px; height: 8px; border-radius: 3px; }
-  .legend .cached { background: var(--chart-1); }
-  .legend .fresh { background: var(--chart-4); }
-  .legend .output { background: var(--chart-2); }
-  @media (max-width: 560px) {
-    .number { font-size: 44px; }
-  }
+  .heading { display:flex; justify-content:space-between; gap:12px; color:var(--muted-foreground); font-size:12px; }
+  .project { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:55%; }
+  .headline { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px; }
+  .number { font:700 36px/1.1 var(--font-sans); letter-spacing:-1.5px; font-variant-numeric:tabular-nums; }
+  .unit { color:var(--muted-foreground); font-size:12px; }
+  summary { font-size:11px; color:var(--muted-foreground); cursor:pointer; list-style:none; }
+  summary::-webkit-details-marker { display:none; }
+  summary:hover { color:var(--foreground); }
+  summary:focus-visible { outline:2px solid var(--ring); outline-offset:3px; }
+  .comparisons { display:grid; gap:8px; margin-top:12px; font-size:11px; }
+  .comparisons div { display:flex; justify-content:space-between; gap:12px; }
+  .comparisons p { color:var(--muted-foreground); font-size:10px; line-height:1.5; }
 </style>

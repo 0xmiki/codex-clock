@@ -11,13 +11,15 @@
   import { onMount } from 'svelte';
   import Brand from '$lib/components/Brand.svelte';
   import TodayPanel from '$lib/components/TodayPanel.svelte';
+  import { usageComparison } from '$lib/comparison';
+  import Limits from '$lib/components/Limits.svelte';
   import Productivity from '$lib/components/Productivity.svelte';
   import TrendChart from '$lib/components/TrendChart.svelte';
   import Standouts from '$lib/components/Standouts.svelte';
   import ThreadTable from '$lib/components/ThreadTable.svelte';
   import Coach from '$lib/components/Coach.svelte';
   import { coach } from '$lib/coach.svelte';
-  import { activeProjects, dailyBuckets, sumThreadUsage, threadApiCost, todayThreads } from '$lib/today';
+  import { activeProjects, dailyBuckets, tokensOnDay, todayThreads } from '$lib/today';
   import type { Snapshot } from '$lib/types';
   import { project } from '$lib/format';
   import { gradeThreads } from '$lib/efficiency';
@@ -32,20 +34,10 @@
   const efficiencyGrades = $derived(gradeThreads(data?.threads ?? []));
 
   let today = $derived(todayThreads(data?.threads || [], now));
-  let selectedToday = $derived(today.filter(thread => !selectedProject || thread.cwd === selectedProject));
-  let daily = $derived(sumThreadUsage(selectedToday));
-  let turns = $derived(selectedToday.reduce((sum, thread) => sum + (thread.usage?.turns ?? 0), 0));
-  let dailyCost = $derived.by(() => {
-    let total = 0, any = false;
-    for (const thread of selectedToday) {
-      const cost = threadApiCost(thread);
-      if (cost !== null) { total += cost; any = true; }
-    }
-    return any ? total : null;
-  });
-  let buckets = $derived(dailyBuckets(data?.threads || [], now));
   let projects = $derived(projectOrder.filter(cwd => (data?.threads || []).some(thread => thread.cwd === cwd)));
   let visibleThreads = $derived((data?.threads || []).filter(thread => !selectedProject || thread.cwd === selectedProject));
+  let daily = $derived(tokensOnDay(visibleThreads, now));
+  let buckets = $derived(dailyBuckets(visibleThreads, now));
   const errorMessage = $derived(error || data?.error || '');
 
   async function refresh() {
@@ -90,7 +82,7 @@
       <span class="size-1.5 rounded-full" class:bg-primary={!errorMessage} class:bg-destructive={Boolean(errorMessage)}></span>
       {errorMessage ? 'Data issue' : data ? `Local Codex · read ${data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '…'}` : 'Connecting…'}
     </Badge>
-    <Badge variant="outline" title="MyLimits reads saved Codex files on this machine and talks only to localhost"><ShieldCheckIcon aria-hidden="true" />100% local</Badge>
+    <Badge variant="outline" title="Dashboard runs locally. Codex contacts OpenAI to check allowance and answer coach questions."><ShieldCheckIcon aria-hidden="true" />Local dashboard</Badge>
   </div>
   <div class="ml-auto flex gap-2">
     <Button variant="outline" onclick={refresh} disabled={refreshing}>
@@ -122,7 +114,8 @@
         <aside class="summary-sidebar" aria-label="Usage overview">
           <ScrollArea class="h-full">
             <div class="flex min-w-0 flex-col gap-4 p-1 pr-4">
-              <TodayPanel total={daily.total} cached={daily.cached} fresh={daily.input} output={daily.output} calls={daily.calls} {turns} sessions={selectedToday.length} cost={dailyCost} projectName={selectedProject ? project(selectedProject) : 'All projects'} />
+              <Limits limits={data.limits} {now} />
+              <TodayPanel total={daily} comparison={usageComparison(visibleThreads, now)} partial={data.hasMore} projectName={selectedProject ? project(selectedProject) : 'All projects'} />
               <Productivity projects={data.productivity ?? []} cwd={selectedProject} {now} partial={data.hasMore} />
               <TrendChart {buckets} />
               <Standouts {today} {efficiencyGrades} onSelectProject={selectProject} />
@@ -142,7 +135,7 @@
           <Separator />
           <footer class="flex flex-wrap justify-between gap-3 text-xs text-muted-foreground">
             <span>Read from local Codex data{data.updatedAt ? ` at ${new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}{data.hasMore ? ` · newest ${data.threads.length} saved threads` : ''}</span>
-            <span>Nothing leaves this machine</span>
+            <span>Allowance checked through your signed-in Codex account</span>
           </footer>
         </div>
       </div>

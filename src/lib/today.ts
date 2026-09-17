@@ -39,17 +39,19 @@ export const threadApiCost = (thread: Thread) => {
   const costs = modelUsages(thread).map(([model, usage]) => estimatedApiCost(usage, model));
   return costs.some(cost => cost === null) ? null : costs.reduce<number>((sum, cost) => sum + cost!, 0);
 };
-export type DayBucket = { day: string; tokens: number; threads: number; calls: number; isToday: boolean };
+export const tokensOnDay = (threads: Thread[], now: number) => threads.reduce((sum, thread) => sum + (thread.usage?.dailyTokens?.[dayKey(now)] ?? 0), 0);
+export type DayBucket = { day: string; tokens: number; threads: number; isToday: boolean };
 export const dailyBuckets = (threads: Thread[], now: number, maxDays = 6) => {
   const todayKey = dayKey(now);
   const buckets = new Map<string, DayBucket>();
   for (const thread of threads) {
-    const day = dayKey(thread.updatedAt * 1000);
-    const bucket = buckets.get(day) || { day, tokens: 0, threads: 0, calls: 0, isToday: day === todayKey };
-    bucket.tokens += thread.usage?.totalTokens ?? 0;
-    bucket.calls += thread.usage?.modelCalls ?? 0;
-    bucket.threads++;
-    buckets.set(day, bucket);
+    for (const [day, tokens] of Object.entries(thread.usage?.dailyTokens ?? {})) {
+      if (day > todayKey) continue;
+      const bucket = buckets.get(day) || { day, tokens: 0, threads: 0, isToday: day === todayKey };
+      bucket.tokens += tokens;
+      bucket.threads++;
+      buckets.set(day, bucket);
+    }
   }
   return [...buckets.values()].toSorted((a, b) => a.day.localeCompare(b.day)).slice(-maxDays).map(bucket => ({ ...bucket, isToday: bucket.day === todayKey }));
 };

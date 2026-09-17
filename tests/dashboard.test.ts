@@ -9,6 +9,7 @@ import { activeProjects, cacheRate, dailyBuckets, projectRollup, sumCacheRate, s
 import type { Snapshot, Thread, UsageMetrics } from '../src/lib/types';
 import { makeFixture, tokenLine } from './fixture';
 import { usagePrompt } from '../server/assistant';
+import { tokensOnDay } from '../src/lib/today';
 
 test('saved stats use the latest cumulative counter, tolerate partial lines, refresh changed files, and keep unknown distinct from zero', async () => {
   const root = await mkdtemp(join(tmpdir(), 'mylimits-usage-'));
@@ -43,7 +44,7 @@ test('usage deltas stay with the model that produced them', async () => {
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('dashboard reads saved thread metadata and logs without any live or account methods', async () => {
+test('dashboard reads saved threads even when account limits are unavailable', async () => {
   const root = await mkdtemp(join(tmpdir(), 'mylimits-rpc-'));
   const rpc = new Rpc();
   try {
@@ -63,7 +64,7 @@ test('dashboard reads saved thread metadata and logs without any live or account
     expect(dashboard.state.threads[2].usage).toBeNull();
     expect(dashboard.state.threads[0]).not.toHaveProperty('path');
     expect(dashboard.state.threads[0]).not.toHaveProperty('status');
-    expect(dashboard.state).not.toHaveProperty('limits');
+    expect(dashboard.state.limits).toBeNull();
     expect(await dashboard.inspectThread('build')).toBe('');
     expect(await dashboard.inspectThread('missing')).toBeNull();
     await dashboard.refresh();
@@ -121,18 +122,23 @@ test('daily buckets order days chronologically and flag today', () => {
   const usage = { totalTokens: 500, inputTokens: 400, cachedInputTokens: 300, outputTokens: 100, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 2, modelCalls: 4, recentRequests: [] };
   const day = (offsetDays: number) => (now - offsetDays * 86400000) / 1000;
   const threads = [
-    { updatedAt: day(2), usage },
-    { updatedAt: day(0), usage },
+    { updatedAt: day(0), usage: { ...usage, dailyTokens: { '2026-09-13': 400, '2026-09-15': 100 } } },
+    { updatedAt: day(0), usage: { ...usage, dailyTokens: { '2026-09-15': 500 } } },
     { updatedAt: day(0), usage },
     { updatedAt: day(0), usage: null }
   ] as Thread[];
   const buckets = dailyBuckets(threads, now, 5);
   expect(buckets.map(bucket => [bucket.day, bucket.threads, bucket.tokens, bucket.isToday])).toEqual([
-    ['2026-09-13', 1, 500, false],
-    ['2026-09-15', 3, 1000, true]
+    ['2026-09-13', 1, 400, false],
+    ['2026-09-15', 2, 600, true]
   ]);
   expect(dailyBuckets([], now)).toEqual([]);
   expect(dailyBuckets(threads, now, 1)).toHaveLength(1);
+  expect(tokensOnDay(threads, now)).toBe(600);
+  expect(tokensOnDay(threads.slice(0, 1), now)).toBe(100);
+  threads[0].updatedAt = day(-1);
+  expect(dailyBuckets(threads, now)).toEqual(buckets);
+  expect(tokensOnDay(threads, now)).toBe(600);
 });
 
 test('project rollup aggregates tokens per cwd and ranks by weight', () => {

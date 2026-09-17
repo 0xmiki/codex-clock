@@ -12,7 +12,7 @@
 <Card.Root class="trend min-w-0 rounded-xl gap-4 p-5">
   <Card.Header class="gap-1 p-0">
     <Card.Title>Recent days</Card.Title>
-    <Card.Description>Cumulative thread totals, bucketed by last saved activity</Card.Description>
+    <Card.Description>Tokens recorded each day · UTC</Card.Description>
   </Card.Header>
   {#if buckets.length}
     <div class="bars" role="img" aria-label={buckets.map(b => `${b.day}: ${exact(b.tokens)} tokens across ${b.threads} threads`).join(', ')}>
@@ -22,14 +22,14 @@
           <div class="bar-wrap">
             <div class="bar" class:today={bucket.isToday}
               style:height="{bucket.tokens > 0 ? Math.max(3, bucket.tokens / peak * 100) : 0}%"
-              title="{bucket.day} · {bucket.threads} threads · {exact(bucket.tokens)} tokens · {bucket.calls} calls"></div>
+              title="{bucket.day} · {bucket.threads} threads · {exact(bucket.tokens)} tokens"></div>
           </div>
           <span class="day" class:today-label={bucket.isToday}>{dayLabel(bucket.day, todayKey)}</span>
           <span class="count">{bucket.threads}</span>
         </div>
       {/each}
     </div>
-    <p class="text-xs text-muted-foreground">Newest {buckets.reduce((sum, b) => sum + b.threads, 0)} saved threads shown · threads still active today keep growing</p>
+    <p class="text-xs text-muted-foreground">Recorded usage from loaded threads</p>
   {:else}
     <p class="text-sm text-muted-foreground">No saved activity in view yet.</p>
   {/if}

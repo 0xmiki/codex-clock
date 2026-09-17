@@ -15,6 +15,7 @@ export type UsageMetrics = TokenBreakdown & {
 export type UsageCall = TokenBreakdown & { model: string; timestamp: number | null; serviceTier?: string | null };
 export type Usage = UsageMetrics & {
   dailyTokens?: Record<string, number>;
+  minuteTokens?: Record<string, number>;
   byModel: Record<string, UsageMetrics>;
   recentCalls?: UsageCall[];
   activeModel?: string;
@@ -27,4 +28,6 @@ export type Thread = {
 };
 export type WorkDay = { day: string; tokens: number; lines: number; work: number };
 export type WorkProject = { cwd: string; root: string | null; days: WorkDay[]; error: string | null };
-export type Snapshot = { error: string | null; updatedAt: number | null; threads: Thread[]; hasMore: boolean; productivity?: WorkProject[] };
+export type LimitWindow = { remaining: number; minutes: number | null; resetsAt: number | null };
+export type AccountLimits = { windows: LimitWindow[]; plan: string | null; checkedAt: number };
+export type Snapshot = { error: string | null; updatedAt: number | null; threads: Thread[]; hasMore: boolean; productivity?: WorkProject[]; limits?: AccountLimits | null };

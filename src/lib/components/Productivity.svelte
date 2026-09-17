@@ -15,7 +15,6 @@
   <div class="heading"><h2>Productivity</h2><span title="Days are measured in UTC">Today</span></div>
   <div class="headline"><div class="score">{days.length ? fmt(points) : '—'}</div><span class="unit">work units</span></div>
   {#if days.length}
-    <div class="chart-heading"><span>Last 7 days</span><span>Peak {fmt(maximum)}</span></div>
     <div class="history" aria-label="Seven-day work history">
       {#each days as day (day.day)}
         {@const isToday = day.day === today?.day}
@@ -48,8 +47,6 @@
   .headline { display:flex; align-items:baseline; gap:10px; }
   .score { font:700 42px/1.1 var(--font-sans); letter-spacing:-1.5px; font-variant-numeric:tabular-nums; }
   .unit { font-size:12px; color:var(--muted-foreground); }
-  .chart-heading { display:flex; justify-content:space-between; font-size:11px; color:var(--muted-foreground); }
-  .chart-heading { margin-top:8px; }
   summary { cursor:pointer; font-size:11px; color:var(--muted-foreground); }
   .history { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:9px; }
   .day { display:flex; flex-direction:column; gap:8px; text-align:center; font-size:10px; color:var(--muted-foreground); }

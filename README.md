@@ -33,7 +33,9 @@ Each row graphs recent requests, cached and uncached input, output, and latest c
 
 On initial load and manual Refresh, MyLimits starts a short-lived `codex app-server --stdio`, requests `thread/list`, reads generated names from `session_index.jsonl`, and reads token counters from the saved rollout paths returned by Codex. The latest valid `total_token_usage` snapshot replaces earlier snapshots. Repeated snapshots are not summed. Files stream line by line; incomplete JSON lines are skipped. Changed files are reread; unchanged counters are cached in memory.
 
-There is no live-thread discovery, account usage/limits request, automatic data polling, or thread mutation. No dollar estimates are calculated. Saved rollouts are a Codex implementation detail and may change with future versions; the format was checked against local Codex 0.154.0 data.
+On refresh, MyLimits also requests account/rateLimits/read through the signed-in Codex client. The compact allowance widget shows remaining percentages and reset times for the account's primary and secondary windows. Codex contacts OpenAI for this lookup. Missing limits show as unavailable without blocking saved thread statistics. Reset times that have passed require a refresh. Project filters do not affect account allowance.
+
+There is no live-thread discovery, automatic data polling, or thread mutation. Saved rollouts are a Codex implementation detail and may change with future versions; the format was checked against local Codex 0.154.0 data.
 
 ## npm / npx
 
