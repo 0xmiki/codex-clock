@@ -1,6 +1,6 @@
 # Codex Watch
 
-A local Codex usage coach and thread dashboard built with Bun and SvelteKit. Ask where your tokens went, spot expensive patterns, and inspect saved thread usage. No Codex Watch account or database.
+A local Codex usage coach and thread dashboard built with SvelteKit and running on Node.js 22+. Ask where your tokens went, spot expensive patterns, and inspect saved thread usage. No Codex Watch account or database. Bun is used for development, builds, and unit tests.
 
 ```sh
 bun install
@@ -9,15 +9,15 @@ bun dev
 
 Open the Vite URL printed in the terminal. Requires an installed `codex` executable. Codex Watch inherits `CODEX_HOME`.
 
-## Run the binary
+## Run the production app
 
 ```sh
 bun run build
-./dist/codex-watch
+npm start
 # Open http://127.0.0.1:4260
 ```
 
-The binary embeds Bun and all web assets. It runs outside this repository without Bun, Node, or `node_modules`; Codex must still be installed.
+The package contains a bundled JavaScript server and web assets. End users need Node.js 22+ and an installed, authenticated Codex CLI. No Bun installation or build step is needed to run the package.
 
 ## Usage coach
 
@@ -45,13 +45,16 @@ npm pack
 npx --yes --package ./codex-watch-0.1.0.tgz codex-watch
 ```
 
-This MVP package contains a native binary for the build machine's OS and architecture. `prepack` records those constraints so npm rejects incompatible machines. The tested build is Linux x64. Multi-platform npm distribution is deferred. End users need Node/npm and Codex, but not Bun. Nothing has been published, and the registry name has not been reserved or verified.
+The same JavaScript package can be installed across operating systems and CPU architectures; it contains no native runtime or production dependencies. Local verification was performed on Linux; other platforms still need runtime testing. Nothing has been published yet.
 
 Flags: `--port 4260`, `--codex <executable>`, `--help`. The web server binds only to `127.0.0.1`. The browser cannot supply file paths or invoke arbitrary RPC methods.
 
 ```sh
 bun test
 bun run check
+node scripts/smoke-npm.mjs
 ```
 
 Tests cover saved cumulative counters, partial writes, cache refresh, missing/invalid data, UTC day boundaries, and the stdio protocol using invented data. No model requests are made.
+
+The npm smoke test packs and installs the app into a temporary directory, runs it under Node without Bun on PATH, and checks assets, HTTP protections, missing-Codex handling, and shutdown. Add `--live` to also read dashboard data through your installed Codex CLI; it does not ask the coach a question.

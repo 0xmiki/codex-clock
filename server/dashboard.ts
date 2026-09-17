@@ -2,6 +2,7 @@ import type { Snapshot, Thread } from '../src/lib/types';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createReadStream } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { Rpc } from './rpc';
 import { createUsageReader } from './usage';
@@ -11,7 +12,7 @@ import { parseAccountLimits } from './limits';
 export async function readGeneratedTitles(path = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'session_index.jsonl')) {
   const titles = new Map<string, string>();
   try {
-    for (const line of (await Bun.file(path).text()).split('\n')) {
+    for (const line of (await readFile(path, 'utf8')).split('\n')) {
       if (!line) continue;
       try {
         const item = JSON.parse(line);

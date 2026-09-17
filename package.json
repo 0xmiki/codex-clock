@@ -16,14 +16,14 @@
   },
   "files": [
     "bin",
-    "dist/codex-watch",
-    "dist/codex-watch.exe",
+    "dist/server.mjs",
+    "dist/web",
     "README.md"
   ],
   "scripts": {
     "dev": "bun scripts/dev.ts",
     "build": "vite build && bun scripts/build.ts",
-    "start": "bun server/main.ts",
+    "start": "node bin/codex-watch.cjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "bun test",
     "prepack": "node scripts/prepack.cjs"
@@ -49,10 +49,5 @@
     "typescript": "^5.0.0",
     "vite": "^7.0.0"
   },
-  "os": [
-    "linux"
-  ],
-  "cpu": [
-    "x64"
-  ]
+  "engines": { "node": ">=22" }
 }

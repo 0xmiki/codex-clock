@@ -1,10 +1,9 @@
-import { mkdir } from 'node:fs/promises';
-import { resolve } from 'node:path';
-const files = [...new Bun.Glob('**/*').scanSync({ cwd: 'build', onlyFiles: true })].sort();
-const imports = files.map((file, i) => `import a${i} from ${JSON.stringify(resolve('build', file))} with { type: 'file' };`);
-await Bun.write('server/assets.generated.ts', '// @ts-nocheck — Bun file-loader imports resolve to paths, not JS module types.\n' + imports.join('\n') + '\nexport default {\n' + files.map((file, i) => `${JSON.stringify('/' + file.replaceAll('\\', '/'))}: a${i}`).join(',\n') + '\n} as Record<string, string>;\n');
+import { cp, mkdir, rm } from 'node:fs/promises';
+
 await mkdir('dist', { recursive: true });
-const outfile = process.platform === 'win32' ? 'dist/codex-watch.exe' : 'dist/codex-watch';
-const result = await Bun.$`bun build server/main.ts --compile --minify --outfile ${outfile}`.nothrow();
-if (result.exitCode) process.exit(result.exitCode);
-console.log(`Built ${outfile} with ${files.length} embedded web assets.`);
+const result = await Bun.build({ entrypoints: ['server/main.ts'], target: 'node', format: 'esm', outdir: 'dist', naming: 'server.mjs', minify: true });
+if (!result.success) throw new AggregateError(result.logs, 'Server build failed');
+// Replace only generated assets so old hashed files cannot accumulate.
+await rm('dist/web', { recursive: true, force: true });
+await cp('build', 'dist/web', { recursive: true });
+console.log('Built Node server and web assets in dist.');

@@ -1,4 +1,5 @@
 import type { Thread, WorkProject } from '../src/lib/types';
+import { spawn } from 'node:child_process';
 
 export const excludedWorkFile = (path: string) => /(^|\/)(node_modules|vendor|dist|build|coverage|\.svelte-kit|generated)(\/|$)|(^|\/)(package-lock\.json|bun\.lockb?|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock)$|\.(min\.(js|css)|map)$|(^|\/)[^/]*generated[^/]*$/i.test(path);
 
@@ -24,13 +25,19 @@ export function countDiffLines(diff: string): number {
 }
 
 async function git(cwd: string, args: string[]) {
-  const child = Bun.spawn(['git', '-C', cwd, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_PAGER: 'cat' } });
-  const timer = setTimeout(() => child.kill(), 10_000);
-  try {
-    const [stdout, , code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
-    if (code !== 0) throw new Error('Git history unavailable');
-    return stdout.trimEnd();
-  } finally { clearTimeout(timer); }
+  return new Promise<string>((resolve, reject) => {
+    const child = spawn('git', ['-C', cwd, ...args], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_PAGER: 'cat' } });
+    const timer = setTimeout(() => child.kill(), 10_000);
+    let stdout = '';
+    child.stdout.setEncoding('utf8').on('data', chunk => { stdout += chunk; });
+    child.stderr.resume();
+    child.on('error', error => { clearTimeout(timer); reject(error); });
+    child.on('close', code => {
+      clearTimeout(timer);
+      if (code !== 0) reject(new Error('Git history unavailable'));
+      else resolve(stdout.trimEnd());
+    });
+  });
 }
 
 export async function readProductivity(threads: Thread[], now = Date.now()): Promise<WorkProject[]> {
