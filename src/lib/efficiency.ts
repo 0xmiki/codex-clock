@@ -13,11 +13,15 @@ const prices: Record<string, { input: number; cached: number; output: number; wr
   'gpt-5.5': { input: 5, cached: .5, output: 30, writes: false }
 };
 
-export function callCost(model: string, input: number, cached: number, output: number): CostRange | null {
+// Verified 2026-09-17: https://developers.openai.com/api/docs/pricing
+// Recorded settings describe the requested tier, not a confirmed billing receipt.
+export function callCost(model: string, input: number, cached: number, output: number, serviceTier: string | null = 'default'): CostRange | null {
   const rate = Object.hasOwn(prices, model) ? prices[model] : null;
   if (!rate || ![input, cached, output].every(n => Number.isFinite(n) && n >= 0) || cached > input || input > 272_000) return null;
+  const multiplier = serviceTier === 'default' ? 1 : serviceTier === 'priority' || serviceTier === 'fast' ? (model === 'gpt-5.5' ? 2.5 : 2) : serviceTier === 'flex' ? .5 : null;
+  if (multiplier === null) return null;
   const low = ((input - cached) * rate.input + cached * rate.cached + output * rate.output) / 1_000_000;
-  return { low, high: low + (rate.writes ? (input - cached) * rate.input * .25 / 1_000_000 : 0) };
+  return { low: low * multiplier, high: (low + (rate.writes ? (input - cached) * rate.input * .25 / 1_000_000 : 0)) * multiplier };
 }
 
 const midpoint = (range: CostRange) => (range.low + range.high) / 2;
@@ -37,6 +41,10 @@ type RecentUsage = {
   averageOutput: number;
   cachePercent: number;
   recentCost: CostRange;
+  standardCost: CostRange;
+  tierCostRatio: number;
+  fastCalls: number;
+  serviceTiers: Record<string, number>;
 } | { available: false; reason: string };
 
 export type ThreadEfficiency = (Extract<RecentUsage, { available: true }> & {
@@ -65,13 +73,17 @@ function recentUsage(thread: Thread): RecentUsage {
   if (calls.length < 5) return { available: false, reason: 'Need 5 recent calls on the current model after a switch or compaction.' };
   if (calls.some(call => call.cachedInputTokens === null)) return { available: false, reason: 'Recent cache counters are missing.' };
   if (calls.some(call => call.inputTokens > 272_000)) return { available: false, reason: 'Long-context pricing is not supported by this grade.' };
-  const costs = calls.map(call => callCost(model, call.inputTokens, call.cachedInputTokens!, call.outputTokens));
-  if (costs.some(cost => cost === null)) return { available: false, reason: 'Recent token counters cannot be priced reliably.' };
+  if (calls.some(call => !call.serviceTier || call.serviceTier === 'auto')) return { available: false, reason: 'Recent service tier is unknown; Fast mode cost cannot be determined.' };
+  const costs = calls.map(call => callCost(model, call.inputTokens, call.cachedInputTokens!, call.outputTokens, call.serviceTier ?? null));
+  if (costs.some(cost => cost === null)) return { available: false, reason: 'Recent service tier or token counters have no verified pricing.' };
   const recentCost = scale(costs.reduce<CostRange>((sum, cost) => add(sum, cost!), { low: 0, high: 0 }), 1 / calls.length);
   const averageInput = calls.reduce((sum, call) => sum + call.inputTokens, 0) / calls.length;
   const averageCached = calls.reduce((sum, call) => sum + call.cachedInputTokens!, 0) / calls.length;
   const averageOutput = calls.reduce((sum, call) => sum + call.outputTokens, 0) / calls.length;
-  return { available: true, model, samples: calls.length, lastSampleAt: last.timestamp, averageInput, averageCached, averageOutput, cachePercent: averageInput ? averageCached / averageInput * 100 : 0, recentCost };
+  const standardCost = scale(calls.reduce<CostRange>((sum, call) => add(sum, callCost(model, call.inputTokens, call.cachedInputTokens!, call.outputTokens)!), { low: 0, high: 0 }), 1 / calls.length);
+  const serviceTiers: Record<string, number> = {};
+  for (const call of calls) { const tier = call.serviceTier === 'fast' ? 'priority' : call.serviceTier!; serviceTiers[tier] = (serviceTiers[tier] ?? 0) + 1; }
+  return { available: true, model, samples: calls.length, lastSampleAt: last.timestamp, averageInput, averageCached, averageOutput, cachePercent: averageInput ? averageCached / averageInput * 100 : 0, recentCost, standardCost, tierCostRatio: midpoint(standardCost) > 0 ? midpoint(recentCost) / midpoint(standardCost) : 1, fastCalls: serviceTiers.priority ?? 0, serviceTiers };
 }
 
 // Build once from the complete snapshot, before project/day filtering. Each peer

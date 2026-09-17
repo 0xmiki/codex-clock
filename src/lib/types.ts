@@ -12,7 +12,7 @@ export type UsageMetrics = TokenBreakdown & {
   modelCalls: number;
   recentRequests: number[];
 };
-export type UsageCall = TokenBreakdown & { model: string; timestamp: number | null };
+export type UsageCall = TokenBreakdown & { model: string; timestamp: number | null; serviceTier?: string | null };
 export type Usage = UsageMetrics & {
   dailyTokens?: Record<string, number>;
   byModel: Record<string, UsageMetrics>;

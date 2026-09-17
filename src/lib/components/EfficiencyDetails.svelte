@@ -6,9 +6,10 @@
 <div class="efficiency-detail">
   <span>Usage Score:</span>
   {#if efficiency.available}
-    <span class="grade grade-{efficiency.grade.toLowerCase()}">{efficiency.grade}</span>
+    <span class="grade grade-{efficiency.grade.toLowerCase()}" title={efficiency.reason}>{efficiency.grade}</span>
+    {#if efficiency.fastCalls > 0}<span>Fast mode: {efficiency.fastCalls}/{efficiency.samples} recent calls · {efficiency.tierCostRatio.toFixed(2)}× standard cost</span>{/if}
   {:else}
-    <span class="unavailable" aria-label="Usage score unavailable">—</span>
+    <span class="unavailable" aria-label="Usage score unavailable" title={efficiency.reason}>—</span>
   {/if}
 </div>
 

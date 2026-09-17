@@ -30,6 +30,7 @@ export function createUsageReader() {
       const longContextModels = new Set<string>();
       let previous: TokenBreakdown | null = null;
       let currentModel = fallbackModel;
+      let serviceTier: string | null = null;
       let sawUsage = false;
       const add = (target: UsageMetrics, value: TokenBreakdown) => {
         target.totalTokens += value.totalTokens; target.inputTokens += value.inputTokens; target.outputTokens += value.outputTokens;
@@ -43,7 +44,12 @@ export function createUsageReader() {
         for await (const line of lines) {
           let record;
           try { record = JSON.parse(line); } catch { continue; } // A writer may leave a partial final line.
-          const nextModel = record?.type === 'turn_context' ? record.payload?.model : record?.type === 'world_state' ? record.payload?.state?.model : null;
+          const settings = record?.type === 'event_msg' && record.payload?.type === 'thread_settings_applied'
+            ? record.payload.thread_settings : record?.type === 'world_state' ? record.payload?.state : record?.type === 'turn_context' ? record.payload : null;
+          if (settings && Object.hasOwn(settings, 'service_tier')) {
+            serviceTier = typeof settings.service_tier === 'string' ? settings.service_tier : null;
+          }
+          const nextModel = settings?.model;
           if (typeof nextModel === 'string' && nextModel) {
             if (nextModel !== currentModel) recentCalls.length = 0;
             currentModel = nextModel;
@@ -83,7 +89,7 @@ export function createUsageReader() {
             total.modelCalls++; modelUsage.modelCalls++;
             if (nextLast) {
               const timestamp = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : NaN;
-              recentCalls.push({ ...nextLast, model: currentModel, timestamp: Number.isFinite(timestamp) ? timestamp : null });
+              recentCalls.push({ ...nextLast, model: currentModel, serviceTier, timestamp: Number.isFinite(timestamp) ? timestamp : null });
               if (recentCalls.length > 12) recentCalls.shift();
               total.recentRequests.push(nextLast.totalTokens); modelUsage.recentRequests.push(nextLast.totalTokens);
               if (total.recentRequests.length > 12) total.recentRequests.shift();

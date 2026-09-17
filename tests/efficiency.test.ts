@@ -9,7 +9,7 @@ import { tokenLine } from './fixture';
 import { usagePrompt } from '../server/assistant';
 
 function thread(input: number, cached: number | null, model = 'gpt-5.5', output = 2_000): Thread {
-  const call: UsageCall = { model, timestamp: 1_700_000_000_000, totalTokens: input + output, inputTokens: input, cachedInputTokens: cached, outputTokens: output, reasoningOutputTokens: 1_000 };
+  const call: UsageCall = { model, serviceTier: 'default', timestamp: 1_700_000_000_000, totalTokens: input + output, inputTokens: input, cachedInputTokens: cached, outputTokens: output, reasoningOutputTokens: 1_000 };
   return { id: 'test', title: 'Test', cwd: '/test', model, modelProvider: 'openai', updatedAt: 0, usageError: null,
     usage: { ...call, last: call, turns: 5, modelCalls: 5, modelContextWindow: 258400, recentRequests: [], byModel: {}, activeModel: model, recentCalls: Array.from({ length: 5 }, () => ({ ...call })) } };
 }
@@ -174,4 +174,40 @@ test('coach receives the selected thread and its efficiency evidence', () => {
   expect(prompt).toContain('SAME model');
   expect(prompt).toContain('efficiency');
   expect(prompt).not.toContain('restartForecast');
+});
+
+test('Fast and mixed modes affect scores without changing tokens, and unknown tiers are ungraded', () => {
+  const t = thread(20_000, 0, 'gpt-5.5', 0);
+  const standard = grade(t);
+  for (const call of t.usage!.recentCalls!) call.serviceTier = 'priority';
+  expect(grade(t).costRatio).toBeCloseTo(2.5);
+  expect(grade(t).grade).toBe('D');
+  expect(grade(t).standardCost).toEqual(standard.recentCost);
+  t.usage!.recentCalls![0].serviceTier = 'default';
+  t.usage!.recentCalls![1].serviceTier = 'fast';
+  expect(grade(t).tierCostRatio).toBeCloseTo(2.2);
+  expect(grade(t).fastCalls).toBe(4);
+  expect(t.usage!.totalTokens).toBe(20_000);
+  const prompt = usagePrompt('Explain', { threads: [t, ...peers()], updatedAt: 0, error: null, hasMore: false }, Date.now(), null, t.id);
+  expect(prompt).toContain('"fastCalls":4');
+  expect(prompt).toContain('not subscription allowance multipliers');
+  for (const tier of [null, undefined, 'auto', 'ultrafast', 'unrecognized']) {
+    t.usage!.recentCalls![0].serviceTier = tier;
+    expect(gradeThreads([t, ...peers()]).get(t.id)!.available).toBe(false);
+  }
+  const sol = callCost('gpt-5.6-sol', 10_000, 5_000, 100)!;
+  expect(callCost('gpt-5.6-sol', 10_000, 5_000, 100, 'priority')).toEqual({ low: sol.low * 2, high: sol.high * 2 });
+});
+
+test('rollout reader preserves tier switches, explicit unknowns and duplicate counters', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mylimits-tiers-'));
+  try {
+    const path = join(root, 'usage.jsonl');
+    const settings = (tier: string | null) => JSON.stringify({ type: 'event_msg', payload: { type: 'thread_settings_applied', thread_settings: { model: 'gpt-5.6-sol', service_tier: tier } } });
+    await Bun.write(path, [tokenLine(100, 10, 0), settings('priority'), tokenLine(200, 20, 0), settings('default'), tokenLine(200, 20, 0), tokenLine(300, 30, 0), settings(null), tokenLine(400, 40, 0)].join('\n'));
+    const usage = (await createUsageReader()(path, 'gpt-5.6-sol')).usage!;
+    expect(usage.recentCalls!.map(call => call.serviceTier)).toEqual([null, 'priority', 'default', null]);
+    expect(usage.modelCalls).toBe(4);
+    expect(usage.totalTokens).toBe(440);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
