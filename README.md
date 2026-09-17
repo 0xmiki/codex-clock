@@ -42,7 +42,7 @@ There is no live-thread discovery, automatic data polling, or thread mutation. S
 ```sh
 bun run build
 npm pack
-npx --yes --package ./codex-watch-0.1.0.tgz codex-watch
+npx --yes --package ./codex-clock-0.1.0.tgz codex-clock
 ```
 
 The same JavaScript package can be installed across operating systems and CPU architectures; it contains no native runtime or production dependencies. Local verification was performed on Linux; other platforms still need runtime testing. Nothing has been published yet.

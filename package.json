@@ -1,18 +1,18 @@
 {
-  "name": "codex-watch",
+  "name": "codex-clock",
   "version": "0.1.0",
   "description": "A local Codex usage coach and allowance dashboard",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/0xmiki/codex-watch.git"
+    "url": "git+https://github.com/0xmiki/codex-clock.git"
   },
-  "homepage": "https://github.com/0xmiki/codex-watch#readme",
+  "homepage": "https://github.com/0xmiki/codex-clock#readme",
   "bugs": {
-    "url": "https://github.com/0xmiki/codex-watch/issues"
+    "url": "https://github.com/0xmiki/codex-clock/issues"
   },
   "type": "module",
   "bin": {
-    "codex-watch": "bin/codex-watch.cjs"
+    "codex-clock": "bin/codex-clock.cjs"
   },
   "files": [
     "bin",
@@ -23,7 +23,7 @@
   "scripts": {
     "dev": "bun scripts/dev.ts",
     "build": "vite build && bun scripts/build.ts",
-    "start": "node bin/codex-watch.cjs",
+    "start": "node bin/codex-clock.cjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "bun test",
     "prepack": "node scripts/prepack.cjs"

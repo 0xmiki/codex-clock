@@ -8,7 +8,7 @@ import { createDashboard } from './dashboard';
 import { createAssistant } from './assistant';
 const { values } = parseArgs({ args: process.argv.slice(2), options: { port: { type: 'string', default: '4260' }, codex: { type: 'string' }, help: { type: 'boolean' } } });
 if (values.help) {
-  console.log('Codex Watch — Codex allowance and saved thread usage\n\n  codex-watch [--port 4260] [--codex executable]\n\nReads account allowance, saved thread metadata, and local token counters on refresh. Requires Codex installed.');
+  console.log('Codex Watch — Codex allowance and saved thread usage\n\n  codex-clock [--port 4260] [--codex executable]\n\nReads account allowance, saved thread metadata, and local token counters on refresh. Requires Codex installed.');
   process.exit(0);
 }
 const port = Number(values.port);
