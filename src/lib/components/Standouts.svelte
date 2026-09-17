@@ -49,7 +49,7 @@
               <span class="actions">
                 {#if efficiency?.available}<b class="grade grade-{efficiency.grade.toLowerCase()}" title={efficiency.reason}>{efficiency.grade}</b>{/if}
                 {#if efficiency?.available && ['D', 'F'].includes(efficiency.grade)}
-                  <Button size="xs" variant="outline" onclick={() => void askCoach('Explain this thread’s cost per token versus the same model, separately from its usage per call across models. Suggest ways to reduce consumption.', thread.id)}>Review score</Button>
+                  <Button size="xs" variant="outline" onclick={() => void askCoach('Explain this thread’s cost per call versus other threads on the same model. Suggest ways to reduce consumption.', thread.id)}>Review score</Button>
                 {/if}
               </span>
             </div>
@@ -80,7 +80,7 @@
           <span class="caption">Cost/token: A ≤ normal · F >3× normal</span>
         </div>
       </div>
-      <p class="hint">{grades.available} of {grades.total} threads with recorded usage today have usage scores. Cost per token over the last 5 calls versus up to 30 other recent threads on the same model, across all projects.</p>
+      <p class="hint">{grades.available} of {grades.total} threads with recorded usage today have usage scores. Estimated cost per call over the last 5 calls versus up to 30 other recent threads on the same model, across all projects.</p>
     {:else}
       <p class="empty">Learning your normal usage. Usage scores need 5 recent priced calls and at least 5 other eligible threads on the same model.</p>
     {/if}

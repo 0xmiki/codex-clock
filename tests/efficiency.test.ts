@@ -22,27 +22,24 @@ function grade(t: Thread, others = peers()) {
   return result;
 }
 
-test('efficiency normalizes token volume while burn retains it, with exact band boundaries', () => {
+test('cost per call captures token volume, with exact band boundaries', () => {
   for (const [ratio, expected] of [[1, 'A'], [1.0001, 'B'], [1.5, 'B'], [1.5001, 'C'], [2, 'C'], [2.0001, 'D'], [3, 'D'], [3.0001, 'F']] as const) expect(burnGrade(ratio)).toBe(expected);
   expect(grade(thread(20_000, 0, 'gpt-5.5', 0)).grade).toBe('A');
   const heavy = grade(thread(80_000, 0, 'gpt-5.5', 0));
-  expect(heavy.grade).toBe('A');
+  expect(heavy.grade).toBe('F');
   expect(heavy.normalCost).toBeCloseTo(.10);
-  expect(heavy.costRatio).toBeCloseTo(1);
-  expect(heavy.burnRatio).toBeCloseTo(4);
-  expect(heavy.costPerMillion).toBeCloseTo(5);
-  expect(heavy.normalCostPerMillion).toBeCloseTo(5);
+  expect(heavy.costRatio).toBeCloseTo(4);
   expect(heavy.baselineThreads).toBe(5);
 });
 
-test('model pricing, caching and output contribute to the same burn multiplier', () => {
+test('same-model comparison isolates model pricing while caching and output affect consumption', () => {
   const others = [...peers(), ...['gpt-5.6-luna', 'gpt-6-astra'].flatMap(model => peers().map(p => ({ ...thread(20_000, 0, model, 0), id: `${model}-${p.id}` })))];
   const luna = grade(thread(80_000, 40_000, 'gpt-5.6-luna', 0), others);
   const astra = grade(thread(80_000, 40_000, 'gpt-6-astra', 0), others);
-  expect(astra.burnRatio).toBeCloseTo(luna.burnRatio * 50);
+  expect(astra.normalCost).toBeCloseTo(luna.normalCost * 50);
   expect(astra.costRatio).toBeCloseTo(luna.costRatio);
-  expect(luna.grade).toBe('A');
-  expect(astra.grade).toBe('A');
+  expect(luna.grade).toBe('D');
+  expect(astra.grade).toBe('D');
   expect(grade(thread(80_000, 0)).costRatio).toBeGreaterThan(grade(thread(80_000, 70_000)).costRatio);
   expect(grade(thread(20_000, 0, 'gpt-5.5', 10_000)).costRatio).toBeGreaterThan(grade(thread(20_000, 0)).costRatio);
   expect(callCost('gpt-6-astra', 100_000, 95_000, 2_000)).toEqual({ low: .245, high: .2575 });
@@ -59,10 +56,10 @@ test('same-model cache inefficiency earns F and other models cannot supply the b
   expect(grade(t, [...cachedPeers, ...foreign]).costRatio).toBeCloseTo(10);
 });
 
-test('normalized cost divides summed cost by summed tokens, not average call rates', () => {
+test('cost per call averages five call costs without dividing by token volume', () => {
   const t = thread(1_000, 0, 'gpt-5.5', 0);
   t.usage!.recentCalls![4] = thread(100_000, 100_000, 'gpt-5.5', 0).usage!.recentCalls![0];
-  expect(grade(t).costPerMillion).toBeCloseTo(.07 / 104_000 * 1_000_000);
+  expect(grade(t).costRatio).toBeCloseTo((.07 / 5) / .1);
 });
 
 test('unknown or insufficient evidence remains ungraded', () => {
@@ -104,8 +101,7 @@ test('baseline excludes the subject, weights each peer equally and resists an ou
   outlier.usage!.modelCalls = 100_000;
   const result = grade(t, [...normal, outlier]);
   expect(result.normalCost).toBeCloseTo(.1);
-  expect(result.costRatio).toBeCloseTo(1);
-  expect(result.burnRatio).toBeCloseTo(4);
+  expect(result.costRatio).toBeCloseTo(4);
   // Duplicate copies cannot inflate the eligible peer count.
   expect(gradeThreads([t, ...Array(5).fill(normal[0])]).get(t.id)!.available).toBe(false);
   const uneven = peers().map((p, i) => ({ ...thread((i + 1) * 20_000, 0, 'gpt-5.5', 0), id: p.id }));
@@ -132,7 +128,7 @@ test('only the last five calls affect the grade', () => {
 test('filtered workflow summaries use the complete snapshot baseline', () => {
   const t = thread(80_000, 0, 'gpt-5.5', 0);
   const results = gradeThreads([t, ...peers()]);
-  expect(workflowGrades([t], results)).toEqual({ counts: { A: 1, B: 0, C: 0, D: 0, F: 0 }, available: 1, total: 1 });
+  expect(workflowGrades([t], results)).toEqual({ counts: { A: 0, B: 0, C: 0, D: 0, F: 1 }, available: 1, total: 1 });
   expect(results.get(t.id)).toEqual(grade(t));
 });
 
@@ -168,9 +164,9 @@ test('coach receives the selected thread and its efficiency evidence', () => {
   const selected = thread(80_000, 0, 'gpt-5.5', 0);
   const prompt = usagePrompt('Review grade', { threads: [selected, ...peers()], updatedAt: 0, error: null, hasMore: false }, Date.now(), null, selected.id);
   expect(prompt).toContain('Selected thread:');
-  expect(prompt).toContain('"grade":"A"');
-  expect(prompt).toContain('"costRatio":1');
-  expect(prompt).toContain('"burnRatio":4');
+  expect(prompt).toContain('"grade":"F"');
+  expect(prompt).toContain('"costRatio":4');
+  expect(prompt).toContain('average estimated cost per call');
   expect(prompt).toContain('SAME model');
   expect(prompt).toContain('efficiency');
   expect(prompt).not.toContain('restartForecast');
@@ -210,4 +206,22 @@ test('rollout reader preserves tier switches, explicit unknowns and duplicate co
     expect(usage.modelCalls).toBe(4);
     expect(usage.totalTokens).toBe(440);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('adding cached context raises consumption and worsens the grade with output unchanged', () => {
+  const cachedPeers = peers().map(p => ({ ...thread(20_000, 20_000, 'gpt-5.5', 0), id: p.id }));
+  const t = thread(20_000, 20_000, 'gpt-5.5', 0);
+  const before = grade(t, cachedPeers);
+  for (const call of t.usage!.recentCalls!) {
+    call.inputTokens += 200_000;
+    call.cachedInputTokens! += 200_000;
+    call.totalTokens += 200_000;
+  }
+  const after = grade(t, cachedPeers);
+  expect(before.grade).toBe('A');
+  expect(after.grade).toBe('F');
+  expect(after.costRatio).toBeCloseTo(11);
+  expect(after.normalCost).toBe(before.normalCost);
+  expect(after.averageOutput).toBe(before.averageOutput);
+  expect(after.recentCost.low).toBeGreaterThan(before.recentCost.high);
 });

@@ -111,9 +111,9 @@
             <Table.Cell class="numeric"><span class="num" class:dim={values.cost === null}>{money(values.cost)}</span></Table.Cell>
             <Table.Cell class="efficiency-col">
               {#if values.efficiency.available}
-                <span class="usage-grade" title={`Usage Score: ${values.efficiency.grade}`}>
+                <span class="usage-grade" title={values.efficiency.reason}>
                   <span class="grade grade-{values.efficiency.grade.toLowerCase()}">{values.efficiency.grade}</span>
-                  <span class="burn-multiplier">{values.efficiency.burnRatio.toFixed(2)}× usage</span>
+                  <span class="burn-multiplier">{values.efficiency.costRatio.toFixed(2)}× usual/call</span>
                 </span>
               {:else}
                 <span class="num dim" title={values.efficiency.reason}>—</span>
@@ -187,7 +187,7 @@
                           <Tooltip.Content>Copy a reference the coach understands</Tooltip.Content>
                         </Tooltip.Root>
                         {#if values.efficiency.available && ['D', 'F'].includes(values.efficiency.grade)}
-                          <Button variant="outline" size="sm" onclick={() => void askCoach('Explain this thread’s cost-per-token Usage Score relative to the same model, and separately its usage per call across models. Use recent input, caching and output. Suggest ways to reduce consumption.', thread.id)}>Review usage</Button>
+                          <Button variant="outline" size="sm" onclick={() => void askCoach('Explain this thread’s cost-per-call Usage Score relative to other threads on the same model. Use recent input, caching and output. Suggest ways to reduce consumption.', thread.id)}>Review usage</Button>
                         {/if}
                       </div>
                     </div>

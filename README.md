@@ -55,7 +55,7 @@ End users do not need Bun, a source checkout, or a build step. The npm package c
 | Today | Tokens recorded today, with a comparison to your usual usage by the same time of day when enough history is available. |
 | Recent days | Daily token totals and the projects that account for today's usage. |
 | Thread details | Input, cached input, output, recent requests, model breakdowns, and the latest recorded context usage. |
-| Usage Score | How a thread's recent estimated cost per token compares with other threads on the same model. Recorded Fast mode settings contribute to the estimate. |
+| Usage Score | How a thread's recent estimated cost per call compares with other threads on the same model. Recorded Fast mode settings contribute to the estimate. |
 | Productivity | A rough activity measure that combines daily token usage with committed Git changes. It does not measure code quality. |
 | Ask coach | An explanation of your usage patterns, with follow-up questions and support for inspecting a selected thread. |
 
@@ -67,7 +67,7 @@ Choose a project to narrow the dashboard. Account allowance always covers the wh
 
 **Daily totals use timestamped changes.** Reopening an old thread does not move its lifetime usage into today. Counts include context sent again on later calls. Cached input is part of input, and reasoning output is part of output, so neither gets counted twice. Daily boundaries use UTC.
 
-**Cost is an estimate.** API-equivalent costs are not a subscription bill or an exact measure of allowance consumed. Usage Scores use the last five calls on the current model and need at least five eligible peer threads. A low grade means higher estimated cost per token relative to those peers, not proof that the work was wasteful.
+**Cost is an estimate.** API-equivalent costs are not a subscription bill or an exact measure of allowance consumed. Usage Scores use the last five calls on the current model and need at least five eligible peer threads. A low grade means higher estimated cost per call relative to those peers, not proof that the work was wasteful.
 
 **Fast mode needs recorded evidence.** The score and coach use saved service-tier settings when available. Those settings describe the requested tier, not confirmed billing. Missing evidence stays unknown. Lifetime API-equivalent totals use standard pricing and exclude tier premiums.
 
