@@ -21,10 +21,10 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           registry-url: https://registry.npmjs.org
@@ -58,7 +58,7 @@ jobs:
       - name: Test a clean npm installation under Node
         run: node scripts/smoke-npm.mjs
       - name: Check publication contents
-        run: npm publish --dry-run --access public
+        run: npm pack --dry-run
       - name: Publish to npm
         if: github.event_name == 'release'
         run: npm publish --access public --provenance --tag "$NPM_DIST_TAG"
