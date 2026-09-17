@@ -38,6 +38,7 @@ async function check(live, autoOpen = false) {
   const marker = join(root, `browser-${port}.json`);
   const env = { ...(live ? process.env : isolatedEnv), CODEX_WATCH_DEV: '0', WSL_DISTRO_NAME: '', CODEX_CLOCK_BROWSER_MARKER: marker };
   const args = [cli, '--port', String(port), ...(autoOpen ? [] : ['--no-open']), ...(live ? [] : ['--codex', join(root, 'missing-codex')])];
+  const started = performance.now();
   const child = spawn(process.execPath, args, { env, cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
   const exited = once(child, 'exit');
   let log = '';
@@ -50,6 +51,11 @@ async function check(live, autoOpen = false) {
       await delay(50);
     }
     assert.match(log, /Codex Clock →/);
+    if (live) {
+      const initial = await (await fetch(base + '/api/dashboard?view=true')).json();
+      console.log(`Startup view: ${Math.round(performance.now() - started)} ms from process spawn; ${initial.pagination.total} saved threads; stale ${initial.stale === true}.`);
+      if (initial.updatedAt) assert.equal(initial.stale, true);
+    }
     const page = await fetch(base);
     assert.equal(page.status, 200);
     assert.match(page.headers.get('content-type'), /text\/html/);

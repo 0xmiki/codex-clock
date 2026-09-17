@@ -45,6 +45,7 @@ async function handle(request: Request) {
       const threadId = typeof body?.threadId === 'string' ? body.threadId : question.match(/\bthread:([a-z0-9-]{6,})/i)?.[1] || null;
       if (!question || question.length > 500) return Response.json({ error: 'Ask a question between 1 and 500 characters.' }, { status: 400, headers });
       try {
+        await dashboard.ready;
         const transcript = threadId ? await dashboard.inspectThread(threadId) : null;
         if (threadId && transcript === null) return Response.json({ error: 'That saved thread is no longer available.' }, { status: 404, headers });
         return Response.json({ answer: await assistant.ask(question, dashboard.state, transcript, threadId) }, { headers });
@@ -57,6 +58,7 @@ async function handle(request: Request) {
         void dashboard.refresh();
         return Response.json(dashboard.progress, { headers });
       }
+      await dashboard.ready;
       if (url.searchParams.get('view') !== 'true') await dashboard.refresh();
       return Response.json(readView(dashboard.state, url.searchParams), { headers });
     }

@@ -71,7 +71,8 @@ Choose a project to narrow the dashboard. Account allowance always covers the wh
 <summary>History coverage and other limits</summary>
 
 - The dashboard indexes all non-archived threads returned by Codex. Summaries cover the full index; the table shows 50 threads per page. This is not a complete account usage ledger.
-- The first scan reads saved logs with bounded concurrency. Later scans reuse a local counter cache and read appended records. The cache lives in `$XDG_CACHE_HOME/codex-clock/usage-v1` (or `~/.cache/codex-clock/usage-v1`), contains no prompt text, and can be deleted while the app is stopped to force a rebuild.
+- Startup shows the last saved dashboard while refreshing in the background. On the first run, threads appear page by page and comparisons stay unavailable until discovery finishes. Allowance and Git productivity do not block usage results.
+- The first scan reads saved logs with bounded concurrency. Later scans reuse counters and read appended records. The local cache includes counters, thread titles, file paths, and the last dashboard snapshot—not full transcripts. It lives in `$XDG_CACHE_HOME/codex-clock/usage-v1` (or `~/.cache/codex-clock/usage-v1`) and can be deleted while the app is stopped to force a rebuild.
 - Missing or unreadable counters stay unknown. Partial history can hide comparisons rather than produce a misleading percentage.
 - Refresh reads saved state. The app does not poll automatically or track active turns in real time.
 - Saved rollout formats can change between Codex versions. The parser was checked against local Codex 0.154.0 data.

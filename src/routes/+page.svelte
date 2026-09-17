@@ -40,10 +40,11 @@
     refreshing = true;
     now = Date.now();
     try {
+      await loadView();
       progress = await readJson('/api/dashboard?background=true');
       while (!disposed && progress.phase !== 'idle') {
         await new Promise(resolve => setTimeout(resolve, 500));
-        if (!disposed) progress = await readJson('/api/index-status');
+        if (!disposed) { progress = await readJson('/api/index-status'); await loadView(); }
       }
       if (disposed) return;
       await loadView();
@@ -103,7 +104,8 @@
 
 <div class="shell" class:with-coach={coach.open}>
   <main class="min-w-0 space-y-4">
-    {#if refreshing}<p role="status" class="text-xs text-muted-foreground">{progress.phase === 'listing' ? `Finding saved threads… ${progress.total} found` : progress.phase === 'indexing' ? `Indexing ${progress.completed} of ${progress.total} threads…` : progress.phase === 'productivity' ? 'Reading project activity…' : 'Refreshing…'}{data ? ' Showing previous results.' : ''}</p>{/if}
+    {#if refreshing}<p role="status" class="text-xs text-muted-foreground">{data?.stale ? 'Showing saved results · ' : data?.hasMore ? 'Partial history · ' : ''}{progress.phase === 'listing' ? `Finding saved threads… ${progress.total} found` : progress.phase === 'indexing' ? `Indexing ${progress.completed} of ${progress.total} threads…` : progress.phase === 'productivity' ? 'Updating productivity…' : progress.phase === 'allowance' ? 'Checking allowance…' : 'Refreshing…'}</p>{/if}
+    {#if !refreshing && data?.stale}<p class="text-xs text-muted-foreground">Showing saved results. Refresh to check for changes.</p>{/if}
     {#if errorMessage}
       <Alert.Root variant="destructive">
         <Alert.Title>Saved threads could not be refreshed.</Alert.Title>
@@ -126,6 +128,7 @@
             <div class="flex min-w-0 flex-col gap-4 p-1 pr-4">
               <Limits limits={data.limits} {now} />
               <TodayPanel total={data.summary.daily} comparison={data.summary.comparison} partial={data.hasMore} projectName={selectedProject ? project(selectedProject) : 'All projects'} />
+              {#if data.productivityPending}<p class="text-xs text-muted-foreground" role="status">Productivity is updating; previous results may be out of date.</p>{/if}
               <Productivity projects={data.productivity ?? []} cwd={selectedProject} {now} partial={data.hasMore} />
               <TrendChart buckets={data.summary.buckets} />
               <Standouts summary={data.summary.standouts} {efficiencyGrades} onSelectProject={selectProject} />
