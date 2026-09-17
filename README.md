@@ -22,6 +22,10 @@
   <a href="https://github.com/0xmiki/codex-clock/issues">Report a bug</a>
 </p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/0xmiki/codex-clock/main/docs/dashboard.svg" width="1600" alt="Codex Clock dashboard showing allowance, daily usage, charts, and threads across sample projects." />
+</p>
+
 Codex Clock is a local browser dashboard for your saved Codex threads. It reads usage from your machine and checks allowance through your signed-in Codex CLI. There is no separate Codex Clock account or hosted database.
 
 ## Get started
