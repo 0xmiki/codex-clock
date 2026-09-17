@@ -1,5 +1,14 @@
 import type { Thread, UsageMetrics } from './types';
 export const dayKey = (time: number) => new Date(time).toISOString().slice(0, 10);
+// Daily views reuse the rollup helpers without exposing lifetime counters as today.
+export const dailyThreads = (threads: Thread[], now: number): Thread[] => threads.flatMap(thread => {
+  const usage = thread.usage;
+  const day = dayKey(now);
+  const tokens = usage?.dailyTokens?.[day];
+  if (!usage || tokens === undefined) return [];
+  const dated = usage.dailyUsage?.[day];
+  return [{ ...thread, usage: { ...usage, ...(dated ?? { inputTokens: 0, cachedInputTokens: null, outputTokens: 0, reasoningOutputTokens: null, modelCalls: 0 }), totalTokens: tokens, turns: 0, byModel: {} } }];
+});
 export const todayThreads = (threads: Thread[], now: number) => threads.filter(thread => dayKey(thread.updatedAt * 1000) === dayKey(now));
 export const activeProjects = (threads: Thread[]) => [...new Set(threads.toSorted((a, b) => b.updatedAt - a.updatedAt).map(thread => thread.cwd))];
 export const sumThreadUsage = (threads: Thread[]) => threads.reduce((sum, thread) => {

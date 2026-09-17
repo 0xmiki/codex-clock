@@ -1,13 +1,11 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button/index.js';
-  import { Badge } from '$lib/components/ui/badge/index.js';
   import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
   import { Skeleton } from '$lib/components/ui/skeleton/index.js';
   import { Separator } from '$lib/components/ui/separator/index.js';
   import * as Alert from '$lib/components/ui/alert/index.js';
   import ArrowClockwiseIcon from 'phosphor-svelte/lib/ArrowClockwiseIcon';
   import ChatCircleIcon from 'phosphor-svelte/lib/ChatCircleIcon';
-  import ShieldCheckIcon from 'phosphor-svelte/lib/ShieldCheckIcon';
   import { onMount } from 'svelte';
   import Brand from '$lib/components/Brand.svelte';
   import TodayPanel from '$lib/components/TodayPanel.svelte';
@@ -19,7 +17,7 @@
   import ThreadTable from '$lib/components/ThreadTable.svelte';
   import Coach from '$lib/components/Coach.svelte';
   import { coach } from '$lib/coach.svelte';
-  import { activeProjects, dailyBuckets, tokensOnDay, todayThreads } from '$lib/today';
+  import { activeProjects, dailyBuckets, tokensOnDay, dailyThreads } from '$lib/today';
   import type { Snapshot } from '$lib/types';
   import { project } from '$lib/format';
   import { gradeThreads } from '$lib/efficiency';
@@ -33,9 +31,9 @@
   let now = $state(Date.now());
   const efficiencyGrades = $derived(gradeThreads(data?.threads ?? []));
 
-  let today = $derived(todayThreads(data?.threads || [], now));
   let projects = $derived(projectOrder.filter(cwd => (data?.threads || []).some(thread => thread.cwd === cwd)));
   let visibleThreads = $derived((data?.threads || []).filter(thread => !selectedProject || thread.cwd === selectedProject));
+  let today = $derived(dailyThreads(visibleThreads, now));
   let daily = $derived(tokensOnDay(visibleThreads, now));
   let buckets = $derived(dailyBuckets(visibleThreads, now));
   const errorMessage = $derived(error || data?.error || '');
@@ -77,13 +75,6 @@
 
 <header class="sticky top-0 z-20 flex h-15 items-center gap-4 border-b bg-background/90 px-4 backdrop-blur-md md:px-7">
   <Brand />
-  <div class="hidden items-center gap-2 sm:flex">
-    <Badge variant={errorMessage ? 'destructive' : 'secondary'}>
-      <span class="size-1.5 rounded-full" class:bg-primary={!errorMessage} class:bg-destructive={Boolean(errorMessage)}></span>
-      {errorMessage ? 'Data issue' : data ? `Local Codex · read ${data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '…'}` : 'Connecting…'}
-    </Badge>
-    <Badge variant="outline" title="Dashboard runs locally. Codex contacts OpenAI to check allowance and answer coach questions."><ShieldCheckIcon aria-hidden="true" />Local dashboard</Badge>
-  </div>
   <div class="ml-auto flex gap-2">
     <Button variant="outline" onclick={refresh} disabled={refreshing}>
       <ArrowClockwiseIcon class={refreshing ? 'animate-spin' : ''} aria-hidden="true" />{refreshing ? 'Reading…' : 'Refresh'}
@@ -115,7 +106,7 @@
           <ScrollArea class="h-full">
             <div class="flex min-w-0 flex-col gap-4 p-1 pr-4">
               <Limits limits={data.limits} {now} />
-              <TodayPanel total={daily} comparison={usageComparison(visibleThreads, now)} partial={data.hasMore} projectName={selectedProject ? project(selectedProject) : 'All projects'} />
+              <TodayPanel total={daily} comparison={usageComparison(visibleThreads, now, data.hasMore)} partial={data.hasMore} projectName={selectedProject ? project(selectedProject) : 'All projects'} />
               <Productivity projects={data.productivity ?? []} cwd={selectedProject} {now} partial={data.hasMore} />
               <TrendChart {buckets} />
               <Standouts {today} {efficiencyGrades} onSelectProject={selectProject} />

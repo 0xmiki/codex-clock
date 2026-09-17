@@ -12,7 +12,7 @@
   </div>
   <p class="headline"><span class="number" title={exact(total)}>{fmt(total)}</span><span class="unit">tokens</span></p>
   <details>
-    <summary>{comparison.percent === null ? comparison.average === 0 ? 'No usual usage yet' : 'Building your baseline' : Math.round(Math.abs(comparison.percent)) === 0 ? 'On par with usual' : `${comparison.percent > 0 ? '↑' : '↓'} ${Math.round(Math.abs(comparison.percent))}% vs usual`}</summary>
+    <summary>{comparison.incomplete ? 'Comparison unavailable · partial history' : comparison.percent === null ? comparison.average === 0 ? 'No usual usage yet' : 'Building your baseline' : Math.round(Math.abs(comparison.percent)) === 0 ? 'On par with usual' : `${comparison.percent > 0 ? '↑' : '↓'} ${Math.round(Math.abs(comparison.percent))}% vs usual`}</summary>
     <div class="comparisons">
       <div><span>Usual by now</span><b>{comparison.average === null ? '—' : fmt(comparison.average)}</b></div>
       <div><span>Yesterday by now</span><b>{comparison.yesterday === null ? '—' : fmt(comparison.yesterday)}</b></div>

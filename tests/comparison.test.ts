@@ -22,3 +22,10 @@ test('insufficient and zero history cannot produce a misleading percentage', () 
   const threads = [{ usage: { minuteTokens: { '2026-09-16T10:00': 100 } } }] as unknown as Thread[];
   expect(usageComparison(threads, Date.parse('2026-09-17T12:00:00Z')).average).toBeNull();
 });
+
+test('truncated and unreadable history suppress comparisons even when old records exist', () => {
+  const threads = [{ usage: { minuteTokens: { '2026-09-01T10:00': 100, '2026-09-16T10:00': 100 } } }] as unknown as Thread[];
+  const now = Date.parse('2026-09-17T12:00:00Z');
+  expect(usageComparison(threads, now, true)).toMatchObject({ incomplete: true, percent: null, average: null, lastWeek: null });
+  expect(usageComparison([...threads, { usage: null } as Thread], now).incomplete).toBe(true);
+});

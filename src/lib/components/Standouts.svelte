@@ -2,9 +2,9 @@
   import * as Card from '$lib/components/ui/card/index.js';
   import { Button } from '$lib/components/ui/button/index.js';
   import type { Thread } from '$lib/types';
-  import { projectRollup, sumCacheRate, threadApiCost } from '$lib/today';
+  import { projectRollup, sumCacheRate } from '$lib/today';
   import { workflowGrades, type ThreadEfficiency } from '$lib/efficiency';
-  import { fmt, money, project } from '$lib/format';
+  import { fmt, project } from '$lib/format';
   import { askCoach } from '$lib/coach.svelte';
   import Ring from './Ring.svelte';
 
@@ -47,12 +47,11 @@
           <li>
             <div class="row">
               <span class="title" title={thread.title}>{thread.title}</span>
-              <span class="tokens" title="Cumulative tokens for this thread">{fmt(thread.usage?.totalTokens)}</span>
+              <span class="tokens" title="Tokens recorded today (UTC)">{fmt(thread.usage?.totalTokens)}</span>
             </div>
             <div class="row dim">
               <span>{project(thread.cwd)}</span>
               <span class="actions">
-                {#if threadApiCost(thread) !== null}<span>{money(threadApiCost(thread))}</span>{/if}
                 {#if efficiency?.available}<b class="grade grade-{efficiency.grade.toLowerCase()}" title={efficiency.reason}>{efficiency.grade}</b>{/if}
                 {#if efficiency?.available && ['D', 'F'].includes(efficiency.grade)}
                   <Button size="xs" variant="outline" onclick={() => void askCoach('Explain this thread’s cost per token versus the same model, separately from its usage per call across models. Suggest ways to reduce consumption.', thread.id)}>Review score</Button>
@@ -86,7 +85,7 @@
           <span class="caption">Cost/token: A ≤ normal · F >3× normal</span>
         </div>
       </div>
-      <p class="hint">{grades.available} of {grades.total} threads updated today have usage scores. Cost per token over the last 5 calls versus up to 30 other recent threads on the same model, across all projects.</p>
+      <p class="hint">{grades.available} of {grades.total} threads with recorded usage today have usage scores. Cost per token over the last 5 calls versus up to 30 other recent threads on the same model, across all projects.</p>
     {:else}
       <p class="empty">Learning your normal usage. Usage scores need 5 recent priced calls and at least 5 other eligible threads on the same model.</p>
     {/if}

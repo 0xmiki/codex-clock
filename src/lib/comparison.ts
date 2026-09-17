@@ -1,6 +1,8 @@
 import type { Thread } from './types';
 
-export function usageComparison(threads: Thread[], now: number) {
+export function usageComparison(threads: Thread[], now: number, partial = false) {
+  const incomplete = partial || threads.some(thread => thread.usageError || !thread.usage || !thread.usage.minuteTokens);
+  if (incomplete) return { incomplete: true, average: null, percent: null, yesterday: null, lastWeek: null, previousWeek: null };
   const dayMs = 86_400_000;
   const start = Math.floor(now / dayMs) * dayMs;
   const clock = new Date(now).toISOString().slice(11, 16);
@@ -22,6 +24,7 @@ export function usageComparison(threads: Thread[], now: number) {
   const average = earliest < start - 7 * dayMs ? Array.from({ length: 7 }, (_, i) => at(i + 1).elapsed).reduce((a, b) => a + b, 0) / 7 : null;
   const today = at(0).elapsed;
   return {
+    incomplete: false,
     average,
     percent: average !== null && average > 0 ? (today / average - 1) * 100 : null,
     yesterday: earliest < start - dayMs ? at(1).elapsed : null,

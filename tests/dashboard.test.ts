@@ -9,7 +9,7 @@ import { activeProjects, cacheRate, dailyBuckets, projectRollup, sumCacheRate, s
 import type { Snapshot, Thread, UsageMetrics } from '../src/lib/types';
 import { makeFixture, tokenLine } from './fixture';
 import { usagePrompt } from '../server/assistant';
-import { tokensOnDay } from '../src/lib/today';
+import { tokensOnDay, dailyThreads } from '../src/lib/today';
 
 test('saved stats use the latest cumulative counter, tolerate partial lines, refresh changed files, and keep unknown distinct from zero', async () => {
   const root = await mkdtemp(join(tmpdir(), 'mylimits-usage-'));
@@ -103,6 +103,21 @@ test('daily summary adds recorded thread usage', () => {
   expect(sumThreadUsage([{ usage }, { usage: { ...usage, cachedInputTokens: null } }, { usage: null }] as Thread[])).toEqual({ total: 200, cached: 60, input: 100, output: 40, calls: 4 });
 });
 
+test('daily rankings and coach ignore lifetime size and last update date', () => {
+  const now = Date.parse('2026-09-17T12:00:00Z');
+  const metrics = { totalTokens: 100, inputTokens: 80, cachedInputTokens: 60, outputTokens: 20, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 0, modelCalls: 1, recentRequests: [] };
+  const old: Thread = { id: 'old', title: 'Old lifetime giant', cwd: '/old', modelProvider: 'openai', updatedAt: 0, usageError: null, usage: { ...metrics, totalTokens: 1_000_000, byModel: {}, dailyTokens: { '2026-09-17': 100 }, dailyUsage: { '2026-09-17': metrics } } };
+  const fresh: Thread = { ...old, id: 'fresh', title: 'Daily leader', cwd: '/fresh', usage: { ...old.usage!, totalTokens: 200, dailyTokens: { '2026-09-17': 200 }, dailyUsage: { '2026-09-17': { ...metrics, totalTokens: 200 } } } };
+  const daily = dailyThreads([old, fresh], now);
+  expect(projectRollup(daily)[0].cwd).toBe('/fresh');
+  expect(sumCacheRate(daily)).toBe(75);
+  expect(old.usage!.totalTokens).toBe(1_000_000);
+  const prompt = usagePrompt('Where did today go?', { threads: [old, fresh], updatedAt: now, error: null, hasMore: false }, now);
+  expect(prompt.indexOf('Daily leader')).toBeLessThan(prompt.indexOf('Old lifetime giant'));
+  expect(prompt).toContain('Recorded tokens today across all loaded threads: 300');
+  expect(prompt).not.toContain('1000000');
+});
+
 test('projects follow latest thread activity and appear once', () => {
   const threads = [{ cwd: '/old', updatedAt: 1 }, { cwd: '/new', updatedAt: 3 }, { cwd: '/old', updatedAt: 2 }] as Thread[];
   expect(activeProjects(threads)).toEqual(['/new', '/old']);
@@ -111,9 +126,9 @@ test('projects follow latest thread activity and appear once', () => {
 test('assistant context keeps the costliest today threads first', () => {
   const now = Date.parse('2026-09-13T12:00:00Z');
   const metrics = { totalTokens: 100, inputTokens: 80, cachedInputTokens: 60, outputTokens: 20, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 1, modelCalls: 2, recentRequests: [] };
-  const usage = { ...metrics, byModel: { 'gpt-5.4': metrics } };
+  const usage = { ...metrics, dailyTokens: { '2026-09-13': 100 }, byModel: { 'gpt-5.4': metrics } };
   const thread = { id: 'a', title: 'Small', cwd: '/a', modelProvider: 'openai', updatedAt: now / 1000, usageError: null, usage };
-  const snapshot: Snapshot = { error: null, updatedAt: now, hasMore: false, threads: [thread, { ...thread, id: 'b', title: 'Large', cwd: '/b', usage: { ...usage, totalTokens: 500 } }] };
+  const snapshot: Snapshot = { error: null, updatedAt: now, hasMore: false, threads: [thread, { ...thread, id: 'b', title: 'Large', cwd: '/b', usage: { ...usage, totalTokens: 500, dailyTokens: { '2026-09-13': 500 } } }] };
   expect(usagePrompt('What cost most?', snapshot, now).indexOf('Large')).toBeLessThan(usagePrompt('What cost most?', snapshot, now).indexOf('Small'));
 });
 
