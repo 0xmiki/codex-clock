@@ -45,7 +45,7 @@ npm pack
 npx --yes --package ./codex-clock-0.1.0.tgz codex-clock
 ```
 
-The same JavaScript package can be installed across operating systems and CPU architectures; it contains no native runtime or production dependencies. Local verification was performed on Linux; other platforms still need runtime testing. Nothing has been published yet.
+The same JavaScript package can be installed across operating systems and CPU architectures; it contains no native runtime or production dependencies. Local verification was performed on Linux; other platforms still need runtime testing. The package is published on npm as `codex-clock`.
 
 Flags: `--port 4260`, `--codex <executable>`, `--help`. The web server binds only to `127.0.0.1`. The browser cannot supply file paths or invoke arbitrary RPC methods.
 
@@ -58,3 +58,19 @@ node scripts/smoke-npm.mjs
 Tests cover saved cumulative counters, partial writes, cache refresh, missing/invalid data, UTC day boundaries, and the stdio protocol using invented data. No model requests are made.
 
 The npm smoke test packs and installs the app into a temporary directory, runs it under Node without Bun on PATH, and checks assets, HTTP protections, missing-Codex handling, and shutdown. Add `--live` to also read dashboard data through your installed Codex CLI; it does not ask the coach a question.
+
+## Releases
+
+Publishing a GitHub Release triggers `.github/workflows/publish.yml`. It checks the version, runs tests and type checks, builds the app, tests a clean npm installation, and publishes with npm provenance. A tag push alone does not publish. Manual workflow runs test the pipeline without publishing.
+
+Configure npm trusted publishing for `codex-clock`: GitHub owner `0xmiki`, repository `codex-clock`, workflow filename `publish.yml`, no environment. Allow direct publishing. No npm token secret is needed.
+
+For the next stable release:
+
+```sh
+npm version patch -m "chore: release %s"
+git push origin main --follow-tags
+gh release create v0.1.1 --verify-tag --generate-notes --title v0.1.1
+```
+
+Use the new version printed by `npm version` in the release command. The release tag must equal `v` plus the version in `package.json`. Version `0.1.0` is already published and cannot be published again. Prerelease versions must also be marked as prereleases on GitHub; they publish to npm's `next` tag instead of `latest`.

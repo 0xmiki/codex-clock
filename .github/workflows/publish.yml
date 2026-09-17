@@ -1,0 +1,64 @@
+name: Publish npm package
+
+on:
+  release:
+    types: [published]
+  # Manual runs verify the pipeline without publishing a version.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+      - name: Use npm with trusted publishing support
+        run: npm install --global npm@11.12.1
+      - name: Validate release version
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const { name, version } = JSON.parse(readFileSync('package.json', 'utf8'));
+          if (name !== 'codex-clock' || process.env.RELEASE_TAG !== `v${version}`) {
+            throw new Error(`Release tag must match package.json: v${version}`);
+          }
+          const prerelease = version.includes('-');
+          if (prerelease !== (process.env.PRERELEASE === 'true')) {
+            throw new Error('GitHub prerelease setting must match the package version.');
+          }
+          appendFileSync(process.env.GITHUB_ENV, `NPM_DIST_TAG=${prerelease ? 'next' : 'latest'}\n`);
+          NODE
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bun run check
+      - run: bun run build
+      - name: Test a clean npm installation under Node
+        run: node scripts/smoke-npm.mjs
+      - name: Check publication contents
+        run: npm publish --dry-run --access public
+      - name: Publish to npm
+        if: github.event_name == 'release'
+        run: npm publish --access public --provenance --tag "$NPM_DIST_TAG"
