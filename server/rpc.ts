@@ -25,7 +25,7 @@ export class Rpc {
       createInterface({ input: child.stdout }).on('line', line => this.receive(line));
       this.send = text => { child.stdin.write(text + '\n'); };
     }
-    await this.request('initialize', { clientInfo: { name: 'codex-watch', title: 'Codex Watch', version: '0.1.0' }, capabilities: { experimentalApi: true } });
+    await this.request('initialize', { clientInfo: { name: 'codex-clock', title: 'Codex Clock', version: '0.1.0' }, capabilities: { experimentalApi: true } });
     this.send(JSON.stringify({ method: 'initialized' }));
   }
 

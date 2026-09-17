@@ -50,7 +50,7 @@ test('dashboard reads saved threads even when account limits are unavailable', a
   try {
     const index = join(root, 'session_index.jsonl');
     await Bun.write(index, '{"id":"review","thread_name":"Generated release review"}\n{"id":"broken"');
-    const dashboard = createDashboard(rpc, await makeFixture(root), index);
+    const dashboard = createDashboard(rpc, await makeFixture(root), index, join(root, 'cache'));
     await dashboard.refresh();
     expect(dashboard.state.error).toBeNull();
     expect(dashboard.state.threads.length).toBe(4);

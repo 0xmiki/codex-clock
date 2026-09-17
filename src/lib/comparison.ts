@@ -1,7 +1,7 @@
 import type { Thread } from './types';
 
 export function usageComparison(threads: Thread[], now: number, partial = false) {
-  const incomplete = partial || threads.some(thread => thread.usageError || !thread.usage || !thread.usage.minuteTokens);
+  const incomplete = partial || threads.some(thread => thread.usageError || (thread.usage ? !thread.usage.minuteTokens || (thread.usage.undatedTokens ?? 0) > 0 : thread.usageError !== null));
   if (incomplete) return { incomplete: true, average: null, percent: null, yesterday: null, lastWeek: null, previousWeek: null };
   const dayMs = 86_400_000;
   const start = Math.floor(now / dayMs) * dayMs;

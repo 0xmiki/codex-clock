@@ -1,118 +1,108 @@
-import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import { createInterface } from 'node:readline';
-import type { TokenBreakdown, Usage, UsageCall, UsageMetrics } from '../src/lib/types';
+import { createHash, randomUUID } from 'node:crypto';
+import { open, readFile, mkdir, rename, writeFile, unlink } from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
+import { join } from 'node:path';
+import { consumeLine, newParser, parserUsage, type ParserState } from './usage-parser';
+import type { Usage } from '../src/lib/types';
+export { parseUsage } from './usage-parser';
 
-const counter = (value: unknown): number | null => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
-export function parseUsage(value: any): TokenBreakdown | null {
-  const totalTokens = counter(value?.total_tokens);
-  const inputTokens = counter(value?.input_tokens);
-  const outputTokens = counter(value?.output_tokens);
-  if (totalTokens === null || inputTokens === null || outputTokens === null) return null;
-  const cached = counter(value?.cached_input_tokens);
-  const reasoning = counter(value?.reasoning_output_tokens);
-  return { totalTokens, inputTokens, outputTokens, cachedInputTokens: cached !== null && cached <= inputTokens ? cached : null, reasoningOutputTokens: reasoning !== null && reasoning <= outputTokens ? reasoning : null };
-}
+const SCHEMA = 1;
+type Entry = { schema: number; model: string; size: number; mtime: number; ctime: number; ino: number; dev: number; birth: number; offset: number; guard: string; state: ParserState; tailState?: ParserState };
+type Result = { usage: Usage | null; usageError: string | null };
+const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 
-export function createUsageReader() {
-  const cache = new Map<string, { size: number; mtime: number; usage: Usage | null }>();
-  return async (path: string | null | undefined, fallbackModel = 'unknown'): Promise<{ usage: Usage | null; usageError: string | null }> => {
-    if (!path) return { usage: null, usageError: 'No saved usage file available.' };
+export function createUsageReader(options: { cacheDir?: string | null } = {}) {
+  const cache = new Map<string, Entry>();
+  const pending = new Map<string, Promise<Result>>();
+  const stats = { bytesRead: 0, fullReads: 0, incrementalReads: 0, cacheHits: 0, persistentHits: 0, cacheWriteErrors: 0 };
+  // Detect truncation, replacement, and changes at append boundaries before reusing counters.
+  async function guard(file: FileHandle, offset: number) {
+    const hash = createHash('sha256');
+    for (const [position, length] of [[0, Math.min(4096, offset)], [Math.max(0, offset - 4096), Math.min(4096, offset)]]) {
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await file.read(buffer, 0, length, position);
+      stats.bytesRead += bytesRead;
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+    return hash.digest('hex');
+  }
+  async function load(path: string): Promise<Entry | undefined> {
+    if (!options.cacheDir) return;
     try {
-      const info = await stat(path);
-      const saved = cache.get(path);
-      if (saved?.size === info.size && saved.mtime === info.mtimeMs) return { usage: saved.usage, usageError: null };
-      const blank = (): UsageMetrics => ({ totalTokens: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0, last: null, modelContextWindow: null, turns: 0, modelCalls: 0, recentRequests: [] });
-      const total = blank();
-      const byModel: Record<string, UsageMetrics> = {};
-      const recentCalls: UsageCall[] = [];
-      const dailyTokens: Record<string, number> = {};
-      const dailyUsage: Record<string, UsageMetrics> = {};
-      const minuteTokens: Record<string, number> = {};
-      const longContextModels = new Set<string>();
-      let previous: TokenBreakdown | null = null;
-      let currentModel = fallbackModel;
-      let serviceTier: string | null = null;
-      let sawUsage = false;
-      const add = (target: UsageMetrics, value: TokenBreakdown) => {
-        target.totalTokens += value.totalTokens; target.inputTokens += value.inputTokens; target.outputTokens += value.outputTokens;
-        target.cachedInputTokens = target.cachedInputTokens === null || value.cachedInputTokens === null ? null : target.cachedInputTokens + value.cachedInputTokens;
-        target.reasoningOutputTokens = target.reasoningOutputTokens === null || value.reasoningOutputTokens === null ? null : target.reasoningOutputTokens + value.reasoningOutputTokens;
-      };
-      // ponytail: stream a changed file in full; switch to tail offsets if large logs make manual refresh slow.
-      const input = createReadStream(path, { encoding: 'utf8' });
-      const lines = createInterface({ input, crlfDelay: Infinity });
-      try {
-        for await (const line of lines) {
-          let record;
-          try { record = JSON.parse(line); } catch { continue; } // A writer may leave a partial final line.
-          const settings = record?.type === 'event_msg' && record.payload?.type === 'thread_settings_applied'
-            ? record.payload.thread_settings : record?.type === 'world_state' ? record.payload?.state : record?.type === 'turn_context' ? record.payload : null;
-          if (settings && Object.hasOwn(settings, 'service_tier')) {
-            serviceTier = typeof settings.service_tier === 'string' ? settings.service_tier : null;
-          }
-          const nextModel = settings?.model;
-          if (typeof nextModel === 'string' && nextModel) {
-            if (nextModel !== currentModel) recentCalls.length = 0;
-            currentModel = nextModel;
-            continue;
-          }
-          if (record?.type === 'compacted' || (record?.type === 'event_msg' && record.payload?.type === 'context_compacted')) {
-            recentCalls.length = 0;
-            continue;
-          }
-          if (record?.type === 'event_msg' && record.payload?.type === 'task_started') {
-            total.turns++;
-            (byModel[currentModel] ||= blank()).turns++;
-            continue;
-          }
-          if (record?.type !== 'event_msg' || record.payload?.type !== 'token_count') continue;
-          const nextTotal = parseUsage(record.payload.info?.total_token_usage);
-          const nextLast = parseUsage(record.payload.info?.last_token_usage);
-          const nextWindow = counter(record.payload.info?.model_context_window);
-          if (nextLast && nextLast.inputTokens > 272_000) longContextModels.add(currentModel);
-          if (nextTotal && nextTotal.totalTokens !== previous?.totalTokens) {
-            const reset = !previous || nextTotal.totalTokens < previous.totalTokens || nextTotal.inputTokens < previous.inputTokens || nextTotal.outputTokens < previous.outputTokens;
-            if (reset) recentCalls.length = 0;
-            const delta: TokenBreakdown = reset ? nextTotal : {
-              totalTokens: nextTotal.totalTokens - previous!.totalTokens,
-              inputTokens: nextTotal.inputTokens - previous!.inputTokens,
-              outputTokens: nextTotal.outputTokens - previous!.outputTokens,
-              cachedInputTokens: nextTotal.cachedInputTokens === null || previous!.cachedInputTokens === null ? null : nextTotal.cachedInputTokens - previous!.cachedInputTokens,
-              reasoningOutputTokens: nextTotal.reasoningOutputTokens === null || previous!.reasoningOutputTokens === null ? null : nextTotal.reasoningOutputTokens - previous!.reasoningOutputTokens
-            };
-            const modelUsage = byModel[currentModel] ||= blank();
-            const recordedAt = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : NaN;
-            if (Number.isFinite(recordedAt)) {
-              const day = new Date(recordedAt).toISOString().slice(0, 10);
-              dailyTokens[day] = (dailyTokens[day] ?? 0) + delta.totalTokens;
-              const dated = dailyUsage[day] ||= blank();
-              add(dated, delta);
-              dated.modelCalls++;
-              const minute = new Date(recordedAt).toISOString().slice(0, 16);
-              minuteTokens[minute] = (minuteTokens[minute] ?? 0) + delta.totalTokens;
-            }
-            add(total, delta); add(modelUsage, delta);
-            total.modelCalls++; modelUsage.modelCalls++;
-            if (nextLast) {
-              const timestamp = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : NaN;
-              recentCalls.push({ ...nextLast, model: currentModel, serviceTier, timestamp: Number.isFinite(timestamp) ? timestamp : null });
-              if (recentCalls.length > 12) recentCalls.shift();
-              total.recentRequests.push(nextLast.totalTokens); modelUsage.recentRequests.push(nextLast.totalTokens);
-              if (total.recentRequests.length > 12) total.recentRequests.shift();
-              if (modelUsage.recentRequests.length > 12) modelUsage.recentRequests.shift();
-            } else recentCalls.length = 0;
-            sawUsage = true;
-          }
-          if (nextTotal) previous = nextTotal;
-          if (nextLast) { total.last = nextLast; (byModel[currentModel] ||= blank()).last = nextLast; }
-          if (nextWindow !== null) { total.modelContextWindow = nextWindow; (byModel[currentModel] ||= blank()).modelContextWindow = nextWindow; }
+      const envelope = JSON.parse(await readFile(join(options.cacheDir, digest(path) + '.json'), 'utf8'));
+      const e = envelope.entry as Entry;
+      if (e.schema !== SCHEMA || !e.state?.total || !e.state?.minuteTokens || !Array.isArray(e.state.recentCalls) || !Number.isSafeInteger(e.offset) || e.offset < 0 || e.offset > e.size || digest(JSON.stringify(e)) !== envelope.checksum) return;
+      stats.persistentHits++;
+      return e;
+    } catch { return; }
+  }
+  async function save(path: string, entry: Entry) {
+    if (!options.cacheDir) return;
+    const target = join(options.cacheDir, digest(path) + '.json'), temporary = target + '.' + randomUUID() + '.tmp';
+    try {
+      await mkdir(options.cacheDir, { recursive: true, mode: 0o700 });
+      await writeFile(temporary, JSON.stringify({ entry, checksum: digest(JSON.stringify(entry)) }), { mode: 0o600 });
+      await rename(temporary, target);
+    } catch { stats.cacheWriteErrors++; await unlink(temporary).catch(() => {}); }
+  }
+  async function read(path: string, model: string): Promise<Result> {
+    let file: FileHandle | undefined;
+    try {
+      file = await open(path, 'r');
+      const info = await file.stat();
+      if (!info.isFile()) throw new Error('Not a file');
+      const saved = cache.get(path) ?? await load(path);
+      const identity = saved && saved.model === model && saved.ino === info.ino && saved.dev === info.dev && saved.birth === info.birthtimeMs;
+      if (identity && saved.size === info.size && saved.mtime === info.mtimeMs && saved.ctime === info.ctimeMs) {
+        stats.cacheHits++; cache.set(path, saved);
+        return { usage: parserUsage(saved.tailState ?? saved.state), usageError: null };
+      }
+      const append = identity && info.size > saved.size && await guard(file, saved.offset) === saved.guard;
+      const state = append ? structuredClone(saved.state) : newParser(model);
+      let offset = append ? saved.offset : 0;
+      if (append) stats.incrementalReads++; else stats.fullReads++;
+      let position = offset;
+      let chunks: Buffer[] = [], length = 0;
+      // Snapshot the file size. Concurrent appends are picked up on the next refresh.
+      while (position < info.size) {
+        const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, info.size - position));
+        const { bytesRead } = await file.read(buffer, 0, buffer.length, position);
+        if (!bytesRead) throw new Error('File changed while reading');
+        stats.bytesRead += bytesRead;
+        let start = 0, newline: number;
+        while ((newline = buffer.indexOf(10, start)) >= 0 && newline < bytesRead) {
+          const part = buffer.subarray(start, newline);
+          const line = chunks.length ? Buffer.concat([...chunks, part], length + part.length) : part;
+          consumeLine(state, line.toString('utf8'));
+          chunks = []; length = 0; start = newline + 1;
+          offset = position + start;
         }
-      } finally { lines.close(); input.destroy(); }
-      const usage: Usage | null = sawUsage ? { ...total, byModel, dailyTokens, dailyUsage, minuteTokens, recentCalls, activeModel: currentModel, longContextModels: [...longContextModels] } : null;
-      if (cache.size >= 100) cache.delete(cache.keys().next().value!);
-      cache.set(path, { size: info.size, mtime: info.mtimeMs, usage });
-      return { usage, usageError: null };
-    } catch { return { usage: null, usageError: 'Saved usage could not be read. Check local file permissions and refresh.' }; }
+        if (start < bytesRead) { const part = buffer.subarray(start, bytesRead); chunks.push(part); length += part.length; }
+        position += bytesRead;
+      }
+      // A valid last line without a newline is visible, but not committed to the
+      // append position. Replay it next time, so partial writes never double count.
+      let tailState: ParserState | undefined;
+      if (length) { tailState = structuredClone(state); consumeLine(tailState, Buffer.concat(chunks, length).toString('utf8')); }
+      const after = await file.stat();
+      if (after.size < info.size || (after.size === info.size && after.mtimeMs !== info.mtimeMs)) throw new Error('File changed while reading');
+      const entry: Entry = { schema: SCHEMA, model, size: info.size, mtime: info.mtimeMs, ctime: info.ctimeMs, ino: info.ino, dev: info.dev, birth: info.birthtimeMs, offset, guard: await guard(file, offset), state, ...(tailState ? { tailState } : {}) };
+      cache.set(path, entry);
+      await save(path, entry);
+      return { usage: parserUsage(tailState ?? state), usageError: null };
+    } catch {
+      cache.delete(path);
+      return { usage: null, usageError: 'Saved usage could not be read. Check local file permissions and refresh.' };
+    } finally { await file?.close(); }
+  }
+  const reader = (path: string | null | undefined, model = 'unknown'): Promise<Result> => {
+    if (!path) return Promise.resolve({ usage: null, usageError: 'No saved usage file available.' });
+    const key = `${path}\0${model}`;
+    const existing = pending.get(key);
+    if (existing) return existing;
+    const work = read(path, model).finally(() => pending.delete(key));
+    pending.set(key, work);
+    return work;
   };
+  return Object.assign(reader, { stats, prune(paths: Set<string>) { for (const path of cache.keys()) if (!paths.has(path)) cache.delete(path); } });
 }

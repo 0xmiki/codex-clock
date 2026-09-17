@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, symlink, writeFile, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createServer } from 'node:net';
@@ -27,16 +27,17 @@ const shims = join(root, 'node-only');
 await mkdir(shims);
 await symlink(process.execPath, join(shims, process.platform === 'win32' ? 'node.exe' : 'node'));
 const isolatedEnv = { ...process.env, PATH: shims, CODEX_WATCH_DEV: '0' };
-assert.match(execFileSync(process.execPath, [cli, '--help'], { env: isolatedEnv, cwd: root, encoding: 'utf8' }), /Codex Watch/);
+assert.match(execFileSync(process.execPath, [cli, '--help'], { env: isolatedEnv, cwd: root, encoding: 'utf8' }), /Codex Clock/);
 assert.throws(() => execFileSync(process.execPath, [cli, '--port', '0'], { env: isolatedEnv, cwd: root, stdio: 'pipe' }));
 
-async function check(live) {
+async function check(live, autoOpen = false) {
   const reservation = createServer().listen(0, '127.0.0.1');
   await once(reservation, 'listening');
   const port = reservation.address().port;
   await new Promise(resolve => reservation.close(resolve));
-  const env = live ? { ...process.env, CODEX_WATCH_DEV: '0' } : isolatedEnv;
-  const args = [cli, '--port', String(port), ...(live ? [] : ['--codex', join(root, 'missing-codex')])];
+  const marker = join(root, `browser-${port}.json`);
+  const env = { ...(live ? process.env : isolatedEnv), CODEX_WATCH_DEV: '0', WSL_DISTRO_NAME: '', CODEX_CLOCK_BROWSER_MARKER: marker };
+  const args = [cli, '--port', String(port), ...(autoOpen ? [] : ['--no-open']), ...(live ? [] : ['--codex', join(root, 'missing-codex')])];
   const child = spawn(process.execPath, args, { env, cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
   const exited = once(child, 'exit');
   let log = '';
@@ -44,17 +45,27 @@ async function check(live) {
   child.stderr.on('data', chunk => { log += chunk; });
   const base = `http://127.0.0.1:${port}`;
   try {
-    for (let i = 0; i < 100 && !log.includes('Codex Watch →'); i++) {
+    for (let i = 0; i < 100 && !log.includes('Codex Clock →'); i++) {
       assert.equal(child.exitCode, null, log);
       await delay(50);
     }
-    assert.match(log, /Codex Watch →/);
+    assert.match(log, /Codex Clock →/);
     const page = await fetch(base);
     assert.equal(page.status, 200);
     assert.match(page.headers.get('content-type'), /text\/html/);
     assert.equal(page.headers.get('x-content-type-options'), 'nosniff');
     const html = await page.text();
     assert.match(html, /_app\/immutable/);
+    if (autoOpen) {
+      let opened;
+      for (let i = 0; i < 100; i++) {
+        try { opened = JSON.parse(await readFile(marker, 'utf8')); break; }
+        catch { await delay(50); }
+      }
+      assert.deepEqual(opened, { url: base + '/', status: 200 }, 'Browser must open the listening server automatically');
+    } else {
+      await assert.rejects(readFile(marker), { code: 'ENOENT' });
+    }
     // Fetch every shipped asset, including lazy chunks and fonts.
     for (const file of packed.files.filter(file => file.path.startsWith('dist/web/'))) {
       const response = await fetch(base + '/' + file.path.slice('dist/web/'.length));
@@ -80,10 +91,26 @@ async function check(live) {
     if (live) {
       assert.equal(dashboard.error, null);
       assert(Array.isArray(dashboard.threads));
-      console.log(`Live Codex: ${dashboard.threads.length} threads; limits ${dashboard.limits ? 'available' : 'unavailable'}.`);
+      assert(dashboard.threads.length <= 50);
+      assert.equal(dashboard.hasMore, false);
+      const second = await (await fetch(base + '/api/dashboard?view=true&page=2')).json();
+      assert.equal(second.summary.daily, dashboard.summary.daily);
+      assert.equal(second.pagination.total, dashboard.pagination.total);
+      assert(!second.threads.some(t => t.usage?.minuteTokens));
+      if (dashboard.pagination.pages > 1) assert.equal(second.pagination.page, 2);
+      console.log(`Live Codex: ${dashboard.pagination.total} indexed threads, ${dashboard.threads.length} rows per page; limits ${dashboard.limits ? 'available' : 'unavailable'}.`);
     } else {
       assert.match(dashboard.error, /Cannot start Codex/);
       assert.deepEqual(dashboard.threads, []);
+      const refresh = await fetch(base + '/api/dashboard?background=true');
+      assert.equal(refresh.status, 200);
+      let status;
+      for (let i = 0; i < 100; i++) {
+        status = await (await fetch(base + '/api/index-status')).json();
+        if (status.phase === 'idle') break;
+        await delay(20);
+      }
+      assert.equal(status.phase, 'idle');
     }
   } finally {
     child.kill('SIGTERM');
@@ -92,6 +119,20 @@ async function check(live) {
     clearTimeout(watchdog);
     assert.equal(code, 0, `Unclean shutdown (${signal}): ${log}`);
   }
+}
+// A fake system browser confirms startup behavior without opening tabs during tests.
+if (process.platform !== 'win32') {
+  const opener = join(shims, process.platform === 'darwin' ? 'open' : 'xdg-open');
+  await writeFile(opener, '#!/usr/bin/env node\n' + `
+const { writeFileSync } = require('node:fs');
+const url = process.argv[2];
+fetch(url).then(async response => {
+  await response.arrayBuffer();
+  writeFileSync(process.env.CODEX_CLOCK_BROWSER_MARKER, JSON.stringify({ url, status: response.status }));
+}).catch(() => process.exit(1));
+`);
+  await chmod(opener, 0o755);
+  await check(false, true);
 }
 await check(false);
 if (process.argv.includes('--live')) await check(true);

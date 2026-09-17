@@ -21,6 +21,7 @@ export type Usage = UsageMetrics & {
   recentCalls?: UsageCall[];
   activeModel?: string;
   longContextModels?: string[];
+  undatedTokens?: number;
 };
 export type Thread = {
   id: string; title: string; cwd: string;

@@ -93,16 +93,23 @@ export function gradeThreads(threads: Thread[]): Map<string, ThreadEfficiency> {
   const samples = unique.map(thread => ({ thread, usage: recentUsage(thread) }));
   const eligible = samples.filter((sample): sample is { thread: Thread; usage: Extract<RecentUsage, { available: true }> } => sample.usage.available)
     .toSorted((a, b) => b.thread.updatedAt - a.thread.updatedAt || a.thread.id.localeCompare(b.thread.id));
+  const tokenRate = (u: Extract<RecentUsage, { available: true }>) => midpoint(u.recentCost) / (u.averageInput + u.averageOutput) * 1_000_000;
+  const recent = eligible.slice(0, BASELINE_THREADS + 1);
+  const byModel = new Map<string, typeof eligible>();
+  for (const sample of eligible) {
+    const peers = byModel.get(sample.usage.model) ?? [];
+    if (peers.length <= BASELINE_THREADS && Number.isFinite(tokenRate(sample.usage))) peers.push(sample);
+    byModel.set(sample.usage.model, peers);
+  }
   return new Map(samples.map(({ thread, usage }): [string, ThreadEfficiency] => {
     if (!usage.available) return [thread.id, usage];
-    const tokenRate = (u: Extract<RecentUsage, { available: true }>) => midpoint(u.recentCost) / (u.averageInput + u.averageOutput) * 1_000_000;
     const median = (values: number[]) => {
       const sorted = values.toSorted((a, b) => a - b);
       const middle = Math.floor(sorted.length / 2);
       return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
     };
-    const others = eligible.filter(sample => sample.thread.id !== thread.id);
-    const peers = others.filter(sample => sample.usage.model === usage.model && Number.isFinite(tokenRate(sample.usage))).slice(0, BASELINE_THREADS);
+    const others = recent.filter(sample => sample.thread.id !== thread.id);
+    const peers = (byModel.get(usage.model) ?? []).filter(sample => sample.thread.id !== thread.id).slice(0, BASELINE_THREADS);
     if (peers.length < MIN_BASELINE_THREADS) return [thread.id, { available: false, reason: 'Need 5 other threads with recent priced calls on the same model to grade efficiency.' }];
     const costPerMillion = tokenRate(usage);
     const normalCostPerMillion = median(peers.map(peer => tokenRate(peer.usage)));

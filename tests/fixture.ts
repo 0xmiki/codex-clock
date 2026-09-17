@@ -23,8 +23,9 @@ export function runFixture(root: string) {
     const now = Math.floor(Date.now() / 1000);
     const thread = (id: string, name: string | null, model: string, path: string, age = 0, preview = '') => ({ id, name, preview, cwd: '/projects/mylimits', model, modelProvider: 'openai', updatedAt: now - age, path: join(root, path) });
     const result = message.method === 'initialize' ? { userAgent: 'fixture' } : message.method === 'thread/list' ? {
-      data: [thread('build', 'Build the Codex integration', 'gpt-5.4', 'build.jsonl'), thread('review', null, 'gpt-5.4-mini', 'review.jsonl'), thread('empty', null, 'gpt-5.4', 'empty.jsonl', 0, '  Investigate slow\nworkspace indexing  '), thread('yesterday', 'Design the dashboard', 'gpt-5.4', 'review.jsonl', 86400)], nextCursor: 'older'
+      data: [thread('build', 'Build the Codex integration', 'gpt-5.4', 'build.jsonl'), thread('review', null, 'gpt-5.4-mini', 'review.jsonl'), thread('empty', null, 'gpt-5.4', 'empty.jsonl', 0, '  Investigate slow\nworkspace indexing  '), thread('yesterday', 'Design the dashboard', 'gpt-5.4', 'review.jsonl', 86400)], nextCursor: 'older' as string | null
     } : null;
+    if (message.method === 'thread/list' && message.params?.cursor) { result!.data = []; result!.nextCursor = null; }
     process.stdout.write(JSON.stringify(result ? { id: message.id, result } : { id: message.id, error: { code: -32601, message: 'Unexpected method: ' + message.method } }) + '\n');
   });
 }

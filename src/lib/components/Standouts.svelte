@@ -1,19 +1,14 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card/index.js';
   import { Button } from '$lib/components/ui/button/index.js';
-  import type { Thread } from '$lib/types';
-  import { projectRollup, sumCacheRate } from '$lib/today';
-  import { workflowGrades, type ThreadEfficiency } from '$lib/efficiency';
+  import type { DashboardView } from '../../../server/view';
+  import type { ThreadEfficiency } from '$lib/efficiency';
   import { fmt, project } from '$lib/format';
   import { askCoach } from '$lib/coach.svelte';
   import Ring from './Ring.svelte';
 
-  let { today, onSelectProject, efficiencyGrades }: { today: Thread[]; onSelectProject: (cwd: string) => void; efficiencyGrades: ReadonlyMap<string, ThreadEfficiency> } = $props();
-
-  const topProjects = $derived(projectRollup(today, 5));
-  const heaviest = $derived(today.filter(t => t.usage).toSorted((a, b) => (b.usage?.totalTokens ?? 0) - (a.usage?.totalTokens ?? 0)).slice(0, 3));
-  const cacheRate = $derived(sumCacheRate(today));
-  const grades = $derived(workflowGrades(today, efficiencyGrades));
+  let { summary, onSelectProject, efficiencyGrades }: { summary: DashboardView['summary']['standouts']; onSelectProject: (cwd: string) => void; efficiencyGrades: ReadonlyMap<string, ThreadEfficiency> } = $props();
+  const { topProjects, heaviest, cacheRate, grades } = $derived(summary);
   const maxProjectTokens = $derived(Math.max(1, ...topProjects.map(row => row.tokens)));
 </script>
 

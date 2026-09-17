@@ -32,7 +32,7 @@ You need **Node.js 22+** and an installed, authenticated [Codex CLI](https://dev
 npx codex-clock@latest
 ```
 
-Open [http://127.0.0.1:4260](http://127.0.0.1:4260) in your browser. Click **Refresh** to read the latest saved usage and account allowance.
+The dashboard opens in your default browser automatically. If no browser is available, open [http://127.0.0.1:4260](http://127.0.0.1:4260) yourself. Click **Refresh** to read the latest saved usage and account allowance.
 
 Prefer an installed command?
 
@@ -70,7 +70,8 @@ Choose a project to narrow the dashboard. Account allowance always covers the wh
 <details>
 <summary>History coverage and other limits</summary>
 
-- The dashboard loads the newest 100 non-archived threads. It is not a complete account usage ledger.
+- The dashboard indexes all non-archived threads returned by Codex. Summaries cover the full index; the table shows 50 threads per page. This is not a complete account usage ledger.
+- The first scan reads saved logs with bounded concurrency. Later scans reuse a local counter cache and read appended records. The cache lives in `$XDG_CACHE_HOME/codex-clock/usage-v1` (or `~/.cache/codex-clock/usage-v1`), contains no prompt text, and can be deleted while the app is stopped to force a rebuild.
 - Missing or unreadable counters stay unknown. Partial history can hide comparisons rather than produce a misleading percentage.
 - Refresh reads saved state. The app does not poll automatically or track active turns in real time.
 - Saved rollout formats can change between Codex versions. The parser was checked against local Codex 0.154.0 data.
@@ -91,6 +92,7 @@ Coach conversations are ephemeral and use a read-only sandbox. The coach is inst
 ```sh
 codex-clock --port 4300
 codex-clock --codex /path/to/codex
+codex-clock --no-open
 codex-clock --help
 ```
 
@@ -99,6 +101,7 @@ codex-clock --help
 | `--port` | `4260` | Choose the local HTTP port. |
 | `--codex` | `codex` on `PATH` | Use a specific Codex executable. |
 | `--help` | | Print usage and exit. |
+| `--no-open` | | Start without opening a browser, for SSH or headless sessions. |
 
 The app inherits `CODEX_HOME` if you use a custom Codex data directory.
 

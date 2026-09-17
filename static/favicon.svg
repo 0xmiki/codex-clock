@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <title>Codex Watch</title>
+  <title>Codex Clock</title>
   <path d="M17 14C19 4 32 1 40 9C52 6 61 16 58 28C67 39 61 52 49 54C42 65 28 64 22 57C9 61 1 49 5 39C-2 29 4 17 17 14Z" fill="#e5e5e5"/>
   <path d="M32 17v16l11 7" stroke="#171717" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

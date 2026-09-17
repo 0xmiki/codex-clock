@@ -9,7 +9,6 @@
   import { onMount } from 'svelte';
   import Brand from '$lib/components/Brand.svelte';
   import TodayPanel from '$lib/components/TodayPanel.svelte';
-  import { usageComparison } from '$lib/comparison';
   import Limits from '$lib/components/Limits.svelte';
   import Productivity from '$lib/components/Productivity.svelte';
   import TrendChart from '$lib/components/TrendChart.svelte';
@@ -17,25 +16,23 @@
   import ThreadTable from '$lib/components/ThreadTable.svelte';
   import Coach from '$lib/components/Coach.svelte';
   import { coach } from '$lib/coach.svelte';
-  import { activeProjects, dailyBuckets, tokensOnDay, dailyThreads } from '$lib/today';
-  import type { Snapshot } from '$lib/types';
+  import type { DashboardView, SortKey } from '../../server/view';
   import { project } from '$lib/format';
-  import { gradeThreads } from '$lib/efficiency';
 
-  let data = $state<Snapshot | null>(null);
+  let data = $state<DashboardView | null>(null);
   let error = $state('');
   let refreshing = $state(false);
   let selectedProject = $state('');
   let filterHeight = $state(0);
-  let projectOrder = $state<string[]>([]);
+  let progress = $state({ phase: 'idle', completed: 0, total: 0 });
+  let page = $state(1);
+  let sortKey = $state<SortKey>('when');
+  let sortDesc = $state(true);
+  let requestId = 0;
+  let disposed = false;
   let now = $state(Date.now());
-  const efficiencyGrades = $derived(gradeThreads(data?.threads ?? []));
-
-  let projects = $derived(projectOrder.filter(cwd => (data?.threads || []).some(thread => thread.cwd === cwd)));
-  let visibleThreads = $derived((data?.threads || []).filter(thread => !selectedProject || thread.cwd === selectedProject));
-  let today = $derived(dailyThreads(visibleThreads, now));
-  let daily = $derived(tokensOnDay(visibleThreads, now));
-  let buckets = $derived(dailyBuckets(visibleThreads, now));
+  const efficiencyGrades = $derived(new Map(data?.grades ?? []));
+  let projects = $derived(data?.projects ?? []);
   const errorMessage = $derived(error || data?.error || '');
 
   async function refresh() {
@@ -43,33 +40,54 @@
     refreshing = true;
     now = Date.now();
     try {
-      const response = await fetch('/api/dashboard', { signal: AbortSignal.timeout(60000) });
-      if (!response.ok) throw new Error(`Could not read saved threads (${response.status}).`);
-      const snapshot: Snapshot = await response.json();
-      const latest = activeProjects(snapshot.threads);
-      projectOrder = [...projectOrder, ...latest.filter(cwd => !projectOrder.includes(cwd))];
-      data = snapshot;
-      error = '';
+      progress = await readJson('/api/dashboard?background=true');
+      while (!disposed && progress.phase !== 'idle') {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (!disposed) progress = await readJson('/api/index-status');
+      }
+      if (disposed) return;
+      await loadView();
       now = Date.now();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not reach the local server.';
     } finally { refreshing = false; }
   }
 
+  async function readJson(url: string) {
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`Could not read saved threads (${response.status}).`);
+    return response.json();
+  }
+
+  async function loadView() {
+    const id = ++requestId;
+    try {
+      const params = new URLSearchParams({ view: 'true', project: selectedProject, page: String(page), sort: sortKey, desc: String(sortDesc) });
+      const snapshot: DashboardView = await readJson(`/api/dashboard?${params}`);
+      if (id !== requestId || disposed) return;
+      data = snapshot; page = snapshot.pagination.page; error = ''; now = Date.now();
+    } catch (e) { if (id === requestId && !disposed) error = e instanceof Error ? e.message : 'Could not reach the local server.'; }
+  }
+
+  function sortThreads(key: SortKey, desc: boolean) { sortKey = key; sortDesc = desc; page = 1; void loadView(); }
+  function changePage(next: number) { page = next; void loadView(); }
+
   function selectProject(cwd: string) {
     selectedProject = selectedProject === cwd ? '' : cwd;
+    page = 1;
+    void loadView();
     document.getElementById('threads')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   onMount(() => {
     void refresh();
-    const clock = setInterval(() => { now = Date.now(); }, 60000);
-    return () => clearInterval(clock);
+    const clock = setInterval(() => { now = Date.now(); if (data && !refreshing) void loadView(); }, 60000);
+    return () => { disposed = true; clearInterval(clock); };
   });
 </script>
 
 <svelte:head>
-  <title>Codex Watch · Usage and allowance</title>
+  <title>Codex Clock · Usage and allowance</title>
   <meta name="description" content="A local dashboard for Codex token usage: daily totals, trends, expensive sessions, and a usage coach." />
 </svelte:head>
 
@@ -85,6 +103,7 @@
 
 <div class="shell" class:with-coach={coach.open}>
   <main class="min-w-0 space-y-4">
+    {#if refreshing}<p role="status" class="text-xs text-muted-foreground">{progress.phase === 'listing' ? `Finding saved threads… ${progress.total} found` : progress.phase === 'indexing' ? `Indexing ${progress.completed} of ${progress.total} threads…` : progress.phase === 'productivity' ? 'Reading project activity…' : 'Refreshing…'}{data ? ' Showing previous results.' : ''}</p>{/if}
     {#if errorMessage}
       <Alert.Root variant="destructive">
         <Alert.Title>Saved threads could not be refreshed.</Alert.Title>
@@ -106,23 +125,30 @@
           <ScrollArea class="h-full">
             <div class="flex min-w-0 flex-col gap-4 p-1 pr-4">
               <Limits limits={data.limits} {now} />
-              <TodayPanel total={daily} comparison={usageComparison(visibleThreads, now, data.hasMore)} partial={data.hasMore} projectName={selectedProject ? project(selectedProject) : 'All projects'} />
+              <TodayPanel total={data.summary.daily} comparison={data.summary.comparison} partial={data.hasMore} projectName={selectedProject ? project(selectedProject) : 'All projects'} />
               <Productivity projects={data.productivity ?? []} cwd={selectedProject} {now} partial={data.hasMore} />
-              <TrendChart {buckets} />
-              <Standouts {today} {efficiencyGrades} onSelectProject={selectProject} />
+              <TrendChart buckets={data.summary.buckets} />
+              <Standouts summary={data.summary.standouts} {efficiencyGrades} onSelectProject={selectProject} />
             </div>
           </ScrollArea>
         </aside>
         <div class="activity min-w-0 space-y-4">
           {#if projects.length > 1}
-            <nav class="pills sticky top-15 z-10 flex gap-2 overflow-x-auto bg-background py-2 sm:flex-wrap sm:overflow-visible" bind:clientHeight={filterHeight} aria-label="Filter threads by project">
-              <Button size="sm" variant={!selectedProject ? 'default' : 'outline'} aria-pressed={!selectedProject} onclick={() => selectedProject = ''}>All projects</Button>
+            <nav class="pills sticky top-15 z-10 flex gap-2 overflow-x-auto bg-background py-2 [&>button]:shrink-0" bind:clientHeight={filterHeight} aria-label="Filter threads by project">
+              <Button size="sm" variant={!selectedProject ? 'default' : 'outline'} aria-pressed={!selectedProject} onclick={() => selectProject('')}>All projects</Button>
               {#each projects as cwd (cwd)}
-                <Button size="sm" variant={selectedProject === cwd ? 'default' : 'outline'} aria-pressed={selectedProject === cwd} title={cwd} onclick={() => selectedProject = selectedProject === cwd ? '' : cwd}>{project(cwd)}</Button>
+                <Button size="sm" variant={selectedProject === cwd ? 'default' : 'outline'} aria-pressed={selectedProject === cwd} title={cwd} onclick={() => selectProject(cwd)}>{project(cwd)}</Button>
               {/each}
             </nav>
           {/if}
-          <div id="threads" class="min-w-0" style:scroll-margin-top={`${76 + filterHeight}px`}><ThreadTable threads={visibleThreads} {efficiencyGrades} {now} /></div>
+          <div id="threads" class="min-w-0" style:scroll-margin-top={`${76 + filterHeight}px`}><ThreadTable threads={data.threads} {efficiencyGrades} {now} {sortKey} {sortDesc} onSort={sortThreads} /></div>
+          {#if data.pagination.pages > 1}
+            <nav class="flex items-center justify-end gap-3 text-xs text-muted-foreground" aria-label="Thread pages">
+              <span>{data.pagination.total} threads · Page {data.pagination.page} of {data.pagination.pages}</span>
+              <Button size="sm" variant="outline" disabled={page <= 1} onclick={() => changePage(page - 1)}>Previous</Button>
+              <Button size="sm" variant="outline" disabled={page >= data.pagination.pages} onclick={() => changePage(page + 1)}>Next</Button>
+            </nav>
+          {/if}
           <Separator />
           <footer class="flex flex-wrap justify-between gap-3 text-xs text-muted-foreground">
             <span>Read from local Codex data{data.updatedAt ? ` at ${new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}{data.hasMore ? ` · newest ${data.threads.length} saved threads` : ''}</span>

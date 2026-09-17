@@ -1,5 +1,6 @@
 import type { Thread, WorkProject } from '../src/lib/types';
 import { spawn } from 'node:child_process';
+import { mapConcurrent } from './concurrency';
 
 export const excludedWorkFile = (path: string) => /(^|\/)(node_modules|vendor|dist|build|coverage|\.svelte-kit|generated)(\/|$)|(^|\/)(package-lock\.json|bun\.lockb?|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock)$|\.(min\.(js|css)|map)$|(^|\/)[^/]*generated[^/]*$/i.test(path);
 
@@ -43,12 +44,14 @@ async function git(cwd: string, args: string[]) {
 export async function readProductivity(threads: Thread[], now = Date.now()): Promise<WorkProject[]> {
   const days = Array.from({ length: 7 }, (_, i) => new Date(now - (6 - i) * 86_400_000).toISOString().slice(0, 10));
   const roots = new Map<string, string | null>();
-  for (const cwd of new Set(threads.map(t => t.cwd))) {
+  const grouped = new Map<string, Thread[]>();
+  for (const t of threads) { const group = grouped.get(t.cwd) ?? []; group.push(t); grouped.set(t.cwd, group); }
+  await mapConcurrent([...grouped.keys()], 4, async cwd => {
     try { roots.set(cwd, await git(cwd, ['rev-parse', '--show-toplevel'])); }
     catch { roots.set(cwd, null); }
-  }
+  });
   const histories = new Map<string, Map<string, number>>();
-  for (const root of new Set([...roots.values()].filter((r): r is string => r !== null))) {
+  await mapConcurrent([...new Set([...roots.values()].filter((r): r is string => r !== null))], 4, async root => {
     try {
       const log = await git(root, ['log', '--first-parent', '--format=%H %ct', `--since=${days[0]}T00:00:00Z`]);
       const commits = log.split('\n').filter(Boolean).map(line => { const [hash, seconds] = line.split(' '); return { hash, day: new Date(Number(seconds) * 1000).toISOString().slice(0, 10) }; });
@@ -65,10 +68,10 @@ export async function readProductivity(threads: Thread[], now = Date.now()): Pro
       }
       histories.set(root, history);
     } catch { /* Missing repositories/history are unknown, not zero work. */ }
-  }
+  });
   return [...roots].map(([cwd, root]) => {
     const history = root ? histories.get(root) : undefined;
-    const selected = threads.filter(t => t.cwd === cwd);
+    const selected = grouped.get(cwd)!;
     return { cwd, root, error: history ? null : 'No readable Git history for this project.', days: days.map(day => {
       const tokens = selected.reduce((sum, t) => sum + (t.usage?.dailyTokens?.[day] ?? 0), 0);
       const lines = history?.get(day) ?? 0;

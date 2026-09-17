@@ -6,9 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { Rpc } from './rpc';
 import { createDashboard } from './dashboard';
 import { createAssistant } from './assistant';
-const { values } = parseArgs({ args: process.argv.slice(2), options: { port: { type: 'string', default: '4260' }, codex: { type: 'string' }, help: { type: 'boolean' } } });
+import { openBrowser } from './browser';
+import { createViewReader } from './view';
+const { values } = parseArgs({ args: process.argv.slice(2), options: { port: { type: 'string', default: '4260' }, codex: { type: 'string' }, help: { type: 'boolean' }, 'no-open': { type: 'boolean' } } });
 if (values.help) {
-  console.log('Codex Watch — Codex allowance and saved thread usage\n\n  codex-clock [--port 4260] [--codex executable]\n\nReads account allowance, saved thread metadata, and local token counters on refresh. Requires Codex installed.');
+  console.log('Codex Clock — Codex allowance and saved thread usage\n\n  codex-clock [--port 4260] [--codex executable] [--no-open]\n\nOpens the dashboard in your default browser. Use --no-open for a headless session.\nReads account allowance, saved thread metadata, and local token counters on refresh. Requires Codex installed.');
   process.exit(0);
 }
 const port = Number(values.port);
@@ -27,6 +29,7 @@ if (process.env.CODEX_WATCH_DEV !== '1') {
 const mimeTypes: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.ico': 'image/x-icon' };
 const rpc = new Rpc();
 const dashboard = createDashboard(rpc, values.codex);
+const readView = createViewReader();
 const assistant = createAssistant(new Rpc(), values.codex);
 async function handle(request: Request) {
     const url = new URL(request.url);
@@ -48,9 +51,14 @@ async function handle(request: Request) {
       } catch (error) { return Response.json({ error: error instanceof Error ? error.message : 'The assistant failed.' }, { status: 500, headers }); }
     }
     if (request.method !== 'GET') return new Response('Method not allowed', { status: 405, headers });
+    if (url.pathname === '/api/index-status') return Response.json(dashboard.progress, { headers });
     if (url.pathname === '/api/dashboard') {
-      await dashboard.refresh();
-      return Response.json(dashboard.state, { headers });
+      if (url.searchParams.get('background') === 'true') {
+        void dashboard.refresh();
+        return Response.json(dashboard.progress, { headers });
+      }
+      if (url.searchParams.get('view') !== 'true') await dashboard.refresh();
+      return Response.json(readView(dashboard.state, url.searchParams), { headers });
     }
     const asset = assets.get(url.pathname === '/' ? '/index.html' : url.pathname);
     if (asset) return new Response(await readFile(asset), { headers: { ...headers, 'Content-Type': mimeTypes[extname(asset)] || 'application/octet-stream' } });
@@ -99,8 +107,14 @@ const server = createServer(async (incoming, outgoing) => {
   }
 });
 server.timeout = 120_000;
-server.on('error', error => { console.error(`Cannot start Codex Watch: ${error.message}`); process.exit(1); });
-server.listen(port, '127.0.0.1', () => console.log(`Codex Watch → http://127.0.0.1:${port}/`));
+server.on('error', error => { console.error(`Cannot start Codex Clock: ${error.message}`); process.exit(1); });
+server.listen(port, '127.0.0.1', () => {
+  const url = `http://127.0.0.1:${port}/`;
+  console.log(`Codex Clock → ${url}`);
+  if (!values['no-open'] && process.env.CODEX_WATCH_DEV !== '1') {
+    void openBrowser(url).catch(() => console.warn(`Could not open your browser automatically. Open ${url}`));
+  }
+});
 function stop() { rpc.close(); assistant.close(); server.close(); server.closeAllConnections(); }
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);

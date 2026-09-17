@@ -4,9 +4,9 @@
 </script>
 
 <span class="brand" class:compact>
-  <img class="mark" src={`${base}/codex-watch.svg`} alt={compact ? 'Codex Watch' : ''} />
+  <img class="mark" src={`${base}/codex-watch.svg`} alt={compact ? 'Codex Clock' : ''} />
   {#if !compact}
-    <span class="word">Codex <em>Watch</em></span>
+    <span class="word">Codex <em>Clock</em></span>
   {/if}
 </span>
 

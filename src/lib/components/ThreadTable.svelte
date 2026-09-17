@@ -19,12 +19,9 @@
   import MixBar from './MixBar.svelte';
   import Sparkline from './Sparkline.svelte';
   import EfficiencyDetails from './EfficiencyDetails.svelte';
+  import type { SortKey } from '../../../server/view';
 
-  let { threads, now, efficiencyGrades }: { threads: Thread[]; now: number; efficiencyGrades: ReadonlyMap<string, ThreadEfficiency> } = $props();
-
-  type SortKey = 'when' | 'tokens' | 'cache' | 'cost' | 'efficiency' | 'project';
-  let sortKey = $state<SortKey>('when');
-  let sortDesc = $state(true);
+  let { threads, now, efficiencyGrades, sortKey, sortDesc, onSort }: { threads: Thread[]; now: number; efficiencyGrades: ReadonlyMap<string, ThreadEfficiency>; sortKey: SortKey; sortDesc: boolean; onSort: (key: SortKey, desc: boolean) => void } = $props();
   let expandedId = $state<string | null>(null);
   let copiedId = $state('');
 
@@ -38,31 +35,13 @@
   });
 
   const rows = $derived(threads.map(row));
-  const sorted = $derived.by(() => {
-    const dir = sortDesc ? -1 : 1;
-    return rows.toSorted((x, y) => {
-      const a = x.thread, b = y.thread;
-      switch (sortKey) {
-        case 'tokens': return ((x.tokens ?? -1) - (y.tokens ?? -1)) * dir;
-        case 'cache': return ((x.cache ?? -1) - (y.cache ?? -1)) * dir;
-        case 'cost': return ((x.cost ?? -1) - (y.cost ?? -1)) * dir;
-        case 'efficiency': {
-          if (!x.efficiency.available) return y.efficiency.available ? 1 : 0;
-          if (!y.efficiency.available) return -1;
-          return (x.efficiency.costRatio - y.efficiency.costRatio) * dir;
-        }
-        case 'project': return project(a.cwd).localeCompare(project(b.cwd)) * dir;
-        default: return (a.updatedAt - b.updatedAt) * dir;
-      }
-    });
-  });
+  const sorted = $derived(rows);
 
   const isOn = (key: SortKey) => sortKey === key;
   const ariaSort = (key: SortKey) => (sortKey === key ? (sortDesc ? 'descending' : 'ascending') : 'none');
 
   function sortBy(key: SortKey) {
-    if (sortKey === key) sortDesc = !sortDesc;
-    else { sortKey = key; sortDesc = key !== 'project'; }
+    onSort(key, sortKey === key ? !sortDesc : key !== 'project');
   }
 
   function toggle(id: string) { expandedId = expandedId === id ? null : id; }

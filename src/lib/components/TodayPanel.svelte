@@ -18,7 +18,7 @@
       <div><span>Yesterday by now</span><b>{comparison.yesterday === null ? '—' : fmt(comparison.yesterday)}</b></div>
       <div><span>Last 7 full days</span><b>{comparison.lastWeek === null ? '—' : fmt(comparison.lastWeek)}</b></div>
       <div><span>Previous 7 days</span><b>{comparison.previousWeek === null ? '—' : fmt(comparison.previousWeek)}</b></div>
-      <p>Tokens · UTC, to the current minute. Usual averages the previous 7 days, including days with no recorded usage. {partial ? 'Newest saved threads only; history is partial.' : 'Based on loaded thread history.'}</p>
+      <p>Tokens · UTC, to the current minute. Usual averages the previous 7 days, including days with no recorded usage. {partial || comparison.incomplete ? 'Some saved usage is missing, unreadable, or has no timestamp.' : 'Based on indexed, non-archived thread history.'}</p>
     </div>
   </details>
 </Card.Root>
