@@ -1,15 +1,23 @@
 {
-  "name": "mylimits",
+  "name": "codex-watch",
   "version": "0.1.0",
-  "description": "A local Codex usage coach and thread dashboard",
+  "description": "A local Codex usage coach and allowance dashboard",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xmiki/codex-watch.git"
+  },
+  "homepage": "https://github.com/0xmiki/codex-watch#readme",
+  "bugs": {
+    "url": "https://github.com/0xmiki/codex-watch/issues"
+  },
   "type": "module",
   "bin": {
-    "mylimits": "bin/mylimits.cjs"
+    "codex-watch": "bin/codex-watch.cjs"
   },
   "files": [
     "bin",
-    "dist/mylimits",
-    "dist/mylimits.exe",
+    "dist/codex-watch",
+    "dist/codex-watch.exe",
     "README.md"
   ],
   "scripts": {

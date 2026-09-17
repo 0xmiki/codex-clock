@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "mylimits",
+      "name": "codex-watch",
       "devDependencies": {
         "@internationalized/date": "^3.12.0",
         "@sveltejs/adapter-static": "^3.0.0",

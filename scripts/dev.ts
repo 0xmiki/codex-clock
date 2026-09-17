@@ -5,7 +5,7 @@ try {
     try {
       listeners.push(Bun.listen({ hostname: '127.0.0.1', port, socket: { data() {} } }));
     } catch {
-      throw new Error(`Port ${port} is already in use. Stop the existing MyLimits dev session before running bun dev again.`);
+      throw new Error(`Port ${port} is already in use. Stop the existing Codex Watch dev session before running bun dev again.`);
     }
   }
 } finally {
@@ -13,7 +13,7 @@ try {
 }
 
 const backend = Bun.spawn(['bun', '--watch', 'server/main.ts'], {
-  env: { ...process.env, MYLIMITS_DEV: '1' }, stdout: 'inherit', stderr: 'inherit'
+  env: { ...process.env, CODEX_WATCH_DEV: '1' }, stdout: 'inherit', stderr: 'inherit'
 });
 let frontend: ReturnType<typeof Bun.spawn> | undefined;
 let stopping = false;
@@ -38,7 +38,7 @@ for (let attempt = 0; attempt < 100 && backend.exitCode === null; attempt++) {
   } catch { await Bun.sleep(100); }
 }
 if (!ready) {
-  console.error('MyLimits backend failed to start on port 4260. See the error above.');
+  console.error('Codex Watch backend failed to start on port 4260. See the error above.');
   await stop(1);
 } else {
   frontend = Bun.spawn(['bun', '--bun', 'node_modules/vite/bin/vite.js', '--port', '5173', '--strictPort'], {

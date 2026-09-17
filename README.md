@@ -1,19 +1,19 @@
-# MyLimits
+# Codex Watch
 
-A local Codex usage coach and thread dashboard built with Bun and SvelteKit. Ask where your tokens went, spot expensive patterns, and inspect saved thread usage. No MyLimits account or database.
+A local Codex usage coach and thread dashboard built with Bun and SvelteKit. Ask where your tokens went, spot expensive patterns, and inspect saved thread usage. No Codex Watch account or database.
 
 ```sh
 bun install
 bun dev
 ```
 
-Open the Vite URL printed in the terminal. Requires an installed `codex` executable. MyLimits inherits `CODEX_HOME`.
+Open the Vite URL printed in the terminal. Requires an installed `codex` executable. Codex Watch inherits `CODEX_HOME`.
 
 ## Run the binary
 
 ```sh
 bun run build
-./dist/mylimits
+./dist/codex-watch
 # Open http://127.0.0.1:4260
 ```
 
@@ -21,7 +21,7 @@ The binary embeds Bun and all web assets. It runs outside this repository withou
 
 ## Usage coach
 
-The coach uses an ephemeral, read-only Codex app-server thread and receives a compact snapshot of the 30 highest-usage threads updated today. It remembers follow-up questions while MyLimits is running, cannot call tools, and does not appear in saved thread history. Its own model turns consume Codex usage.
+The coach uses an ephemeral, read-only Codex app-server thread and receives a compact snapshot of the 30 highest-usage threads updated today. It remembers follow-up questions while Codex Watch is running, cannot call tools, and does not appear in saved thread history. Its own model turns consume Codex usage.
 
 ## Saved thread stats
 
@@ -31,9 +31,9 @@ Each full-width row uses the saved thread title returned by Codex, then Codex's 
 
 Each row graphs recent requests, cached and uncached input, output, and latest context use. Cached input is part of input; reasoning output is part of output, not an extra token charge. Missing counters remain unknown, never zero.
 
-On initial load and manual Refresh, MyLimits starts a short-lived `codex app-server --stdio`, requests `thread/list`, reads generated names from `session_index.jsonl`, and reads token counters from the saved rollout paths returned by Codex. The latest valid `total_token_usage` snapshot replaces earlier snapshots. Repeated snapshots are not summed. Files stream line by line; incomplete JSON lines are skipped. Changed files are reread; unchanged counters are cached in memory.
+On initial load and manual Refresh, Codex Watch starts a short-lived `codex app-server --stdio`, requests `thread/list`, reads generated names from `session_index.jsonl`, and reads token counters from the saved rollout paths returned by Codex. The latest valid `total_token_usage` snapshot replaces earlier snapshots. Repeated snapshots are not summed. Files stream line by line; incomplete JSON lines are skipped. Changed files are reread; unchanged counters are cached in memory.
 
-On refresh, MyLimits also requests account/rateLimits/read through the signed-in Codex client. The compact allowance widget shows remaining percentages and reset times for the account's primary and secondary windows. Codex contacts OpenAI for this lookup. Missing limits show as unavailable without blocking saved thread statistics. Reset times that have passed require a refresh. Project filters do not affect account allowance.
+On refresh, Codex Watch also requests account/rateLimits/read through the signed-in Codex client. The compact allowance widget shows remaining percentages and reset times for the account's primary and secondary windows. Codex contacts OpenAI for this lookup. Missing limits show as unavailable without blocking saved thread statistics. Reset times that have passed require a refresh. Project filters do not affect account allowance.
 
 There is no live-thread discovery, automatic data polling, or thread mutation. Saved rollouts are a Codex implementation detail and may change with future versions; the format was checked against local Codex 0.154.0 data.
 
@@ -42,7 +42,7 @@ There is no live-thread discovery, automatic data polling, or thread mutation. S
 ```sh
 bun run build
 npm pack
-npx --yes --package ./mylimits-0.1.0.tgz mylimits
+npx --yes --package ./codex-watch-0.1.0.tgz codex-watch
 ```
 
 This MVP package contains a native binary for the build machine's OS and architecture. `prepack` records those constraints so npm rejects incompatible machines. The tested build is Linux x64. Multi-platform npm distribution is deferred. End users need Node/npm and Codex, but not Bun. Nothing has been published, and the registry name has not been reserved or verified.

@@ -3,13 +3,13 @@ import { Rpc } from './rpc';
 import { createDashboard } from './dashboard';
 import { createAssistant } from './assistant';
 // Vite serves development assets; only standalone runs load the generated bundle.
-const assets: Record<string, string> = process.env.MYLIMITS_DEV === '1'
+const assets: Record<string, string> = process.env.CODEX_WATCH_DEV === '1'
   ? {}
   : (await import('./assets.generated')).default;
 
 const { values } = parseArgs({ args: Bun.argv.slice(2), options: { port: { type: 'string', default: '4260' }, codex: { type: 'string' }, help: { type: 'boolean' } } });
 if (values.help) {
-  console.log('MyLimits — saved Codex thread usage\n\n  mylimits [--port 4260] [--codex executable]\n\nReads saved thread metadata and local token counters on refresh. Requires Codex installed.');
+  console.log('Codex Watch — Codex allowance and saved thread usage\n\n  codex-watch [--port 4260] [--codex executable]\n\nReads account allowance, saved thread metadata, and local token counters on refresh. Requires Codex installed.');
   process.exit(0);
 }
 const port = Number(values.port);
@@ -48,7 +48,7 @@ const server = Bun.serve({
     return new Response('Not found. For development run bun dev; for a standalone UI run bun run build.', { status: 404, headers });
   }
 });
-console.log(`MyLimits → ${server.url}`);
+console.log(`Codex Watch → ${server.url}`);
 function stop() { rpc.close(); assistant.close(); server.stop(true); process.exit(0); }
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);

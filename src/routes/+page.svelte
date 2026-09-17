@@ -69,7 +69,7 @@
 </script>
 
 <svelte:head>
-  <title>MyLimits · Codex usage mission control</title>
+  <title>Codex Watch · Usage and allowance</title>
   <meta name="description" content="A local dashboard for Codex token usage: daily totals, trends, expensive sessions, and a usage coach." />
 </svelte:head>
 

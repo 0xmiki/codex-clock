@@ -4,7 +4,7 @@ const files = [...new Bun.Glob('**/*').scanSync({ cwd: 'build', onlyFiles: true 
 const imports = files.map((file, i) => `import a${i} from ${JSON.stringify(resolve('build', file))} with { type: 'file' };`);
 await Bun.write('server/assets.generated.ts', '// @ts-nocheck — Bun file-loader imports resolve to paths, not JS module types.\n' + imports.join('\n') + '\nexport default {\n' + files.map((file, i) => `${JSON.stringify('/' + file.replaceAll('\\', '/'))}: a${i}`).join(',\n') + '\n} as Record<string, string>;\n');
 await mkdir('dist', { recursive: true });
-const outfile = process.platform === 'win32' ? 'dist/mylimits.exe' : 'dist/mylimits';
+const outfile = process.platform === 'win32' ? 'dist/codex-watch.exe' : 'dist/codex-watch';
 const result = await Bun.$`bun build server/main.ts --compile --minify --outfile ${outfile}`.nothrow();
 if (result.exitCode) process.exit(result.exitCode);
 console.log(`Built ${outfile} with ${files.length} embedded web assets.`);
