@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { Rpc } from './rpc';
 import { createDashboard } from './dashboard';
 import { createAssistant } from './assistant';
+import { defaultCoachModel, isCoachModel } from '../src/lib/coach-models';
 import { openBrowser } from './browser';
 import { createViewReader } from './view';
 const { values } = parseArgs({ args: process.argv.slice(2), options: { port: { type: 'string', default: '4260' }, codex: { type: 'string' }, help: { type: 'boolean' }, 'no-open': { type: 'boolean' } } });
@@ -41,6 +42,8 @@ async function handle(request: Request) {
       let body;
       try { body = await request.json(); }
       catch { return Response.json({ error: 'Send a JSON question.' }, { status: 400, headers }); }
+      const model = body?.model === undefined ? defaultCoachModel : body.model;
+      if (!isCoachModel(model)) return Response.json({ error: 'Choose Luna, Terra, Sol or Astra.' }, { status: 400, headers });
       const question = typeof body?.question === 'string' ? body.question.trim() : '';
       const threadId = typeof body?.threadId === 'string' ? body.threadId : question.match(/\bthread:([a-z0-9-]{6,})/i)?.[1] || null;
       if (!question || question.length > 500) return Response.json({ error: 'Ask a question between 1 and 500 characters.' }, { status: 400, headers });
@@ -48,7 +51,7 @@ async function handle(request: Request) {
         await dashboard.ready;
         const transcript = threadId ? await dashboard.inspectThread(threadId) : null;
         if (threadId && transcript === null) return Response.json({ error: 'That saved thread is no longer available.' }, { status: 404, headers });
-        return Response.json({ answer: await assistant.ask(question, dashboard.state, transcript, threadId) }, { headers });
+        return Response.json({ answer: await assistant.ask(question, dashboard.state, transcript, threadId, model) }, { headers });
       } catch (error) { return Response.json({ error: error instanceof Error ? error.message : 'The assistant failed.' }, { status: 500, headers }); }
     }
     if (request.method !== 'GET') return new Response('Method not allowed', { status: 405, headers });

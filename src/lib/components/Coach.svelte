@@ -4,7 +4,8 @@
   import ArrowUpIcon from 'phosphor-svelte/lib/ArrowUpIcon';
   import XIcon from 'phosphor-svelte/lib/XIcon';
   import type { Snapshot } from '$lib/types';
-  import { coach, askCoach } from '$lib/coach.svelte';
+  import { coachModelLabel, nextCoachModel } from '$lib/coach-models';
+  import { coach, askCoach, cycleCoachModel } from '$lib/coach.svelte';
   import { tick } from 'svelte';
 
   let { snapshot }: { snapshot: Snapshot | null } = $props();
@@ -36,7 +37,7 @@
     <div class="messages" role="log" aria-label="Usage conversation" aria-live="polite">
       {#each coach.messages as message, index (index)}
         <div class="message" class:user={message.role === 'user'}>
-          <span class="speaker">{message.role === 'user' ? 'You' : 'Ask'}</span>
+          <span class="speaker">{message.role === 'user' ? 'You' : message.model ? `Ask · ${coachModelLabel(message.model)}` : 'Ask'}</span>
           <p>{message.text}</p>
         </div>
       {/each}
@@ -47,7 +48,9 @@
     <form class="composer" onsubmit={submit}>
       <textarea bind:value={question} maxlength={500} rows={2} placeholder="Ask about your usage…" aria-label="Usage question" onkeydown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); void submit(); } }}></textarea>
       <div class="composer-tools">
-        <span>{coach.asking ? 'Working…' : 'Usage context included'}</span>
+        <button class="model-select" type="button" disabled={coach.asking} onclick={cycleCoachModel} aria-label={`Ask model: ${coachModelLabel(coach.model)}. Switch to ${coachModelLabel(nextCoachModel(coach.model))}`} title="Click to cycle Luna → Terra → Sol → Astra">
+          {coachModelLabel(coach.model)} <span aria-hidden="true">↻</span>
+        </button>
         <button class="send" type="submit" disabled={coach.asking || !ready || !question.trim()} aria-label="Send question"><ArrowUpIcon size={18} weight="bold" /></button>
       </div>
     </form>
@@ -73,7 +76,9 @@
   textarea { display:block; width:100%; min-height:60px; max-height:180px; field-sizing:content; resize:none; border:0; outline:none; padding:0; background:transparent; color:var(--foreground); font:400 13px/1.6 var(--font-sans); }
   textarea::placeholder { color:var(--muted-foreground); }
   .composer-tools { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:10px; }
-  .composer-tools span { font-size:10px; color:var(--muted-foreground); }
+  .model-select { display:flex; align-items:center; gap:7px; border:1px solid var(--border); border-radius:8px; padding:5px 9px; background:var(--muted); color:var(--foreground); font-size:11px; cursor:pointer; }
+  .model-select:not(:disabled):hover { border-color:var(--ring); }
+  .model-select:disabled { opacity:.5; cursor:default; }
   .send { display:grid; place-items:center; width:32px; height:32px; flex-shrink:0; border-radius:50%; background:var(--primary); color:var(--primary-foreground); cursor:pointer; }
   .send:disabled { opacity:.3; cursor:default; }
   .send:not(:disabled):hover { opacity:.85; }

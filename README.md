@@ -59,6 +59,8 @@ End users do not need Bun, a source checkout, or a build step. The npm package c
 | Productivity | A rough activity measure that combines daily token usage with committed Git changes. It does not measure code quality. |
 | Ask coach | An explanation of your usage patterns, with follow-up questions and support for inspecting a selected thread. |
 
+In Ask, click the model button to cycle Luna → Terra → Sol → Astra → Luna. The selected model handles the next question, including follow-ups in the same conversation.
+
 Choose a project to narrow the dashboard. Account allowance always covers the whole account.
 
 ## How the numbers work
